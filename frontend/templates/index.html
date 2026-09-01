@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CampusFleet - College Bus Live Tracking System</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+
+<body class="dark-theme">
+    <!-- Main App Container -->
+    <div class="app-layout">
+
+        <!-- Sidebar Navigation & Filters -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Sidebar Header -->
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">
+                        <i class="fa-solid fa-bus-simple"></i>
+                    </div>
+                    <div class="brand-text">
+                        <h1>Campus<span>Fleet</span></h1>
+                        <span class="subtitle">College Bus Live Tracker</span>
+                    </div>
+                </div>
+                <button class="icon-btn mobile-close-btn" id="closeSidebarBtn" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-grid">
+                <div class="stat-card total" id="filterStatTotal">
+                    <div class="stat-icon"><i class="fa-solid fa-bus"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statTotalCount">0</span>
+                        <span class="stat-label">Total Buses</span>
+                    </div>
+                </div>
+                <div class="stat-card online" id="filterStatOnline">
+                    <div class="stat-icon"><i class="fa-solid fa-signal"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statOnlineCount">0</span>
+                        <span class="stat-label">Online</span>
+                    </div>
+                </div>
+                <div class="stat-card offline" id="filterStatOffline">
+                    <div class="stat-icon"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statOfflineCount">0</span>
+                        <span class="stat-label">Offline</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filters Container -->
+            <div class="filter-section">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="busSearchInput" placeholder="Search Bus ID, Route, Driver..."
+                        autocomplete="off">
+                    <button class="clear-btn hidden" id="clearSearchBtn"><i
+                            class="fa-solid fa-circle-xmark"></i></button>
+                </div>
+
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label for="routeFilterSelect"><i class="fa-solid fa-route"></i> Route</label>
+                        <select id="routeFilterSelect">
+                            <option value="all">All Routes</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="statusFilterSelect"><i class="fa-solid fa-circle-dot"></i> Status</label>
+                        <select id="statusFilterSelect">
+                            <option value="all">All Status</option>
+                            <option value="online">Online Only</option>
+                            <option value="offline">Offline Only</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Bus Details Drawer (Shows when a bus is clicked) -->
+            <div class="bus-detail-drawer hidden" id="busDetailDrawer">
+                <div class="drawer-header">
+                    <div class="drawer-title">
+                        <span class="bus-badge" id="detailBusId">BUS001</span>
+                        <span class="bus-number-text" id="detailBusNumber">TS 09 UB 1001</span>
+                    </div>
+                    <button class="close-drawer-btn" id="closeDrawerBtn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="drawer-body">
+                    <div class="status-indicator-bar" id="detailStatusIndicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text" id="detailStatusText">ONLINE</span>
+                    </div>
+
+                    <div class="detail-grid">
+                        <div class="detail-item full-width">
+                            <div class="detail-label"><i class="fa-solid fa-map-location-dot"></i> Route Name</div>
+                            <div class="detail-val" id="detailRouteName">Route 01: Koti - Abids</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label"><i class="fa-solid fa-gauge-high"></i> Speed</div>
+                            <div class="detail-val highlight" id="detailSpeed">0 km/h</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label"><i class="fa-solid fa-compass"></i> Heading</div>
+                            <div class="detail-val" id="detailHeading">0° N</div>
+                        </div>
+
+                        <div class="detail-item full-width">
+                            <div class="detail-label"><i class="fa-solid fa-location-crosshairs"></i> Coordinates</div>
+                            <div class="detail-val mono" id="detailCoordinates">17.385044, 78.486671</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label"><i class="fa-solid fa-user-tie"></i> Driver</div>
+                            <div class="detail-val" id="detailDriverName">Ramesh Kumar</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label"><i class="fa-solid fa-phone"></i> Phone</div>
+                            <div class="detail-val" id="detailDriverPhone">+91 98480 11001</div>
+                        </div>
+
+                        <div class="detail-item full-width">
+                            <div class="detail-label"><i class="fa-solid fa-clock"></i> Last Updated</div>
+                            <div class="detail-val" id="detailLastUpdated">Just now</div>
+                        </div>
+
+                        <div class="detail-item full-width history-filter-box">
+                            <div class="detail-label"><i class="fa-solid fa-calendar-days"></i> Route Date</div>
+                            <div class="history-select-row">
+                                <select id="drawerHistoryDateSelect" class="form-select-sm">
+                                    <option value="all">Latest / All Available</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="drawer-actions">
+                        <button class="btn btn-primary" id="centerMapBtn">
+                            <i class="fa-solid fa-crosshairs"></i> Center on Map
+                        </button>
+                        <button class="btn btn-secondary" id="toggleHistoryBtn">
+                            <i class="fa-solid fa-timeline"></i> View History Path
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bus List Section -->
+            <div class="bus-list-container">
+                <div class="list-header">
+                    <span class="list-title">Active Buses</span>
+                    <span class="list-count" id="filteredCountBadge">25 buses</span>
+                </div>
+
+                <div class="bus-cards-list" id="busCardsList">
+                    <!-- Cards populated dynamically by JS -->
+                    <div class="skeleton-loader">
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <div class="api-sync-status">
+                    <span class="pulse-dot" id="syncPulseDot"></span>
+                    <span id="syncStatusText">Auto-sync active (10s)</span>
+                </div>
+                <button class="admin-login-link" id="openAdminBtn">
+                    <i class="fa-solid fa-shield-halved"></i> Admin Portal
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="map-container">
+            <!-- Mobile Navigation Header Bar -->
+            <header class="top-nav-mobile">
+                <button class="mobile-toggle-btn" id="openSidebarBtn">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="mobile-brand">
+                    <i class="fa-solid fa-bus"></i> CampusFleet
+                </div>
+                <div class="mobile-stats">
+                    <span class="badge online" id="mobileOnlineBadge"><i class="fa-solid fa-signal"></i> <span
+                            id="mobileOnlineCount">0</span></span>
+                </div>
+            </header>
+
+            <!-- Leaflet Map Container -->
+            <div id="map"></div>
+
+            <!-- Floating Map Overlays & Controls -->
+            <div class="map-overlay-controls">
+                <div class="map-control-card sync-card">
+                    <i class="fa-solid fa-rotate spin-icon" id="manualRefreshIcon"></i>
+                    <span id="nextRefreshCountdown">10s</span>
+                </div>
+                <button class="map-control-card layer-btn" id="mapFitBoundsBtn" title="Fit all buses on map">
+                    <i class="fa-solid fa-expand"></i> Fit All
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Admin Modal -->
+    <div class="modal-backdrop hidden" id="adminModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-user-gear"></i> Admin Management Portal</h2>
+                <button class="close-modal-btn" id="closeAdminModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Login View -->
+                <div class="admin-view" id="adminLoginView">
+                    <p class="modal-desc">Login with administrator credentials to manage college bus data and audit history.</p>
+                    <form id="adminLoginForm">
+                        <div class="form-group">
+                            <label for="adminUsernameInput">Username</label>
+                            <input type="text" id="adminUsernameInput" required placeholder="admin">
+                        </div>
+                        <div class="form-group">
+                            <label for="adminPasswordInput">Password</label>
+                            <input type="password" id="adminPasswordInput" required placeholder="••••••••">
+                        </div>
+                        <div class="form-error hidden" id="adminLoginError"></div>
+                        <button type="submit" class="btn btn-primary full-width">Sign In</button>
+                    </form>
+                </div>
+
+                <!-- Admin Dashboard View -->
+                <div class="admin-view hidden" id="adminDashboardView">
+                    <div class="admin-top-bar">
+                        <span>Welcome, <strong id="adminUserDisplayName">Admin</strong></span>
+                        <button class="btn btn-sm btn-outline" id="adminLogoutBtn"><i
+                                class="fa-solid fa-right-from-bracket"></i> Logout</button>
+                    </div>
+
+                    <div class="admin-tabs">
+                        <button class="tab-btn active" id="tabHistoryAuditBtn"><i class="fa-solid fa-clock-rotate-left"></i> History Audit</button>
+                        <button class="tab-btn" id="tabAddBusBtn"><i class="fa-solid fa-plus"></i> Add New Bus</button>
+                    </div>
+
+                    <!-- History Audit Tab Pane -->
+                    <div class="admin-tab-pane" id="adminHistorySection">
+                        <p class="modal-desc">Select a Bus Number and Date to inspect all continuous GPS pings received from the physical hardware.</p>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="adminHistoryBusSelect"><i class="fa-solid fa-bus"></i> Bus Number</label>
+                                <select id="adminHistoryBusSelect" class="admin-select" required>
+                                    <option value="">Select Bus...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adminHistoryDateInput"><i class="fa-solid fa-calendar-day"></i> Date</label>
+                                <input type="date" id="adminHistoryDateInput" class="admin-input">
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary full-width" id="adminViewLocationsBtn">
+                            <i class="fa-solid fa-route"></i> View Locations
+                        </button>
+
+                        <!-- History Results Table Area -->
+                        <div id="adminHistoryResults" class="admin-history-results hidden">
+                            <div class="history-results-header">
+                                <span class="badge" id="adminHistoryCountBadge">0 Locations Found</span>
+                                <button class="btn btn-sm btn-secondary" id="adminShowOnMapBtn">
+                                    <i class="fa-solid fa-map-location-dot"></i> Show on Map
+                                </button>
+                            </div>
+                            <div class="history-table-container">
+                                <table class="history-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Time</th>
+                                            <th>Date</th>
+                                            <th>Latitude</th>
+                                            <th>Longitude</th>
+                                            <th>Speed</th>
+                                            <th>Heading</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminHistoryTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Bus Tab Pane -->
+                    <div class="admin-tab-pane hidden" id="adminAddBusSection">
+                        <form id="addBusForm" class="admin-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="newBusId">Bus ID (e.g. BUS026)</label>
+                                    <input type="text" id="newBusId" placeholder="BUS026" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="newBusNumber">Bus License Number</label>
+                                    <input type="text" id="newBusNumber" placeholder="TS 09 UB 1026" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="newRouteName">Route Description</label>
+                                <input type="text" id="newRouteName" placeholder="Route 26: Medchal - Jeedimetla" required>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="newDriverName">Driver Name</label>
+                                    <input type="text" id="newDriverName" placeholder="Sunil Kumar" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="newDriverPhone">Driver Phone</label>
+                                    <input type="text" id="newDriverPhone" placeholder="+91 98480 11026" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="newCapacity">Bus Seating Capacity</label>
+                                <input type="number" id="newCapacity" value="50" min="10" max="100" required>
+                            </div>
+
+                            <div class="form-msg hidden" id="adminFormMsg"></div>
+                            <button type="submit" class="btn btn-success full-width"><i class="fa-solid fa-save"></i>
+                                Register Bus</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Application JS -->
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>
