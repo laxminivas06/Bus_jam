@@ -1002,10 +1002,11 @@ def save_location():
             }), 200
         else:
             # Auto-create bus for legacy / direct test pings
+            chosen_bus_id = str(raw_bus_number).strip().upper() if (raw_bus_number and str(raw_bus_number).strip()) else device_id_clean.upper()
             bus = Bus(
-                bus_id=device_id_clean.upper(),
-                bus_name=f"College Bus {device_id_clean.upper()}",
-                bus_number=device_id_clean.upper(),
+                bus_id=chosen_bus_id,
+                bus_name=f"College Bus {chosen_bus_id}",
+                bus_number=chosen_bus_id,
                 device_id=device_id_clean.upper(),
                 route_name=f"Route 01: Campus Main",
                 route_id="ROUTE-01",
