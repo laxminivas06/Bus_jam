@@ -990,6 +990,593 @@ html, body {
 }
 
 /* ==========================================================================
+   ESP DEVICES & 7-DAY ROUTE HISTORY EXTENSIONS
+   ========================================================================== */
+.btn-outline {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+.btn-outline:hover {
+    background: var(--bg-subtle);
+    border-color: var(--primary-border);
+    color: var(--primary);
+}
+
+.header-counter-badge {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.hud-sub-ident {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.hud-esp-tag {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xs);
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Mode Switcher inside HUD */
+.hud-mode-switcher {
+    display: flex;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-color);
+    padding: 3px;
+    gap: 4px;
+}
+
+.mode-tab-btn {
+    flex: 1;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: var(--transition);
+}
+
+.mode-tab-btn:hover {
+    color: var(--text-main);
+}
+
+.mode-tab-btn.active {
+    background: var(--bg-surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-xs);
+}
+
+/* 7-Day History View Section */
+.history-view-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.history-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.history-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 600;
+}
+
+.seven-day-nav-pills {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 3px;
+}
+
+.seven-day-nav-pills::-webkit-scrollbar {
+    height: 4px;
+}
+
+.seven-day-nav-pills::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.date-pill-btn {
+    flex-shrink: 0;
+    padding: 5px 8px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-body);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    transition: var(--transition);
+}
+
+.date-pill-btn .pill-day {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.date-pill-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary-border);
+}
+
+.date-pill-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+.date-pill-btn.active .pill-day {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.history-summary-box {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+}
+
+.summary-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.summary-metric .lbl {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.summary-metric .val {
+    font-size: 12px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    color: var(--text-main);
+    margin-top: 1px;
+}
+
+/* Route Replay Bar */
+.route-replay-controls {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.replay-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.replay-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 11px;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.replay-btn:hover {
+    background: var(--bg-hover);
+    color: var(--primary);
+}
+
+.replay-btn.play {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+
+.replay-btn.play:hover {
+    background: var(--primary-hover);
+}
+
+.replay-scrubber {
+    flex: 1;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.replay-speed-selector {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-xs);
+    padding: 2px;
+}
+
+.speed-opt-btn {
+    padding: 2px 6px;
+    background: transparent;
+    border: none;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.speed-opt-btn.active {
+    background: var(--bg-surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-xs);
+}
+
+.replay-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Wide Devices Modal */
+.modal-card-wide {
+    max-width: 780px;
+    width: 95%;
+}
+
+.modal-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.unassigned-alert {
+    background: var(--warning-light);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+    color: var(--warning-text);
+    font-size: 12px;
+}
+
+.unassigned-alert i {
+    font-size: 18px;
+    color: var(--warning);
+    margin-top: 1px;
+}
+
+.unassigned-alert strong {
+    font-weight: 800;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.devices-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.devices-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    text-align: left;
+}
+
+.devices-table th {
+    background: var(--bg-subtle);
+    padding: 9px 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 10px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.devices-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-body);
+}
+
+.devices-table tr:last-child td {
+    border-bottom: none;
+}
+
+.devices-table tr:hover {
+    background: #f8fafc;
+}
+
+.device-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.device-status-badge.online {
+    background: var(--success-light);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
+}
+
+.device-status-badge.connecting {
+    background: var(--warning-light);
+    color: var(--warning-text);
+    border: 1px solid var(--warning-border);
+}
+
+.device-status-badge.offline {
+    background: var(--offline-bg);
+    color: var(--offline-text);
+    border: 1px solid var(--offline-border);
+}
+
+/* Device Summary Cards */
+.device-summary-cards {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.device-stat-pill {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.device-stat-pill .stat-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.device-stat-pill .stat-value {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.device-stat-pill.success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+.device-stat-pill.success .stat-value {
+    color: #059669;
+}
+
+.device-stat-pill.info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.device-stat-pill.info .stat-value {
+    color: #2563eb;
+}
+
+.device-stat-pill.warning {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+.device-stat-pill.warning .stat-value {
+    color: #d97706;
+}
+
+/* Platform Badges */
+.badge-platform {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.badge-platform.esp8266 {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+
+.badge-platform.esp32 {
+    background: #f5f3ff;
+    color: #6d28d9;
+    border-color: #ddd6fe;
+}
+
+.badge-platform.cellular {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+
+.badge-platform.rpi {
+    background: #fff1f2;
+    color: #be123c;
+    border-color: #fecdd3;
+}
+
+/* GPS Availability Badges */
+.badge-gps {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.badge-gps.active {
+    color: #15803d;
+    background: #dcfce7;
+}
+
+.badge-gps.searching {
+    color: #b45309;
+    background: #fef3c7;
+}
+
+/* Auto-discovered Badge */
+.badge-autodisc {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: #fef08a;
+    color: #854d0e;
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+.device-name-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-rename-device {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+.btn-rename-device:hover {
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+.device-bus-select {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    max-width: 160px;
+}
+
+.register-device-section {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+}
+
+.register-device-section h3 {
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* History Pin Markers on Leaflet Map */
+.history-pin {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: var(--shadow-md);
+    border: 2px solid #ffffff;
+}
+
+.history-pin.start {
+    background: #10b981;
+}
+
+.history-pin.end {
+    background: #ef4444;
+}
+
+.history-pin.replay-live {
+    background: #2563eb;
+    animation: pulse 1.2s infinite;
+}
+
+/* ==========================================================================
    RESPONSIVENESS
    ========================================================================== */
 @media (max-width: 900px) {

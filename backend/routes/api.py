@@ -133,6 +133,296 @@ def trigger_retention_cleanup():
     return jsonify(res), 200
 
 
+@api_bp.route("/devices", methods=["GET"])
+def get_devices():
+    """List all registered ESP hardware devices with live connection statuses and assigned buses."""
+    devices = db_instance.get_all_devices(compute_status=True)
+    online_count = sum(1 for d in devices if d.get("is_online"))
+    connecting_count = sum(1 for d in devices if d.get("status") == "connecting")
+    offline_count = sum(1 for d in devices if d.get("status") == "offline")
+    unassigned_count = sum(1 for d in devices if not d.get("assigned_bus_id"))
+
+    return jsonify({
+        "status": "success",
+        "count": len(devices),
+        "metrics": {
+            "total_devices": len(devices),
+            "online_devices": online_count,
+            "connecting_devices": connecting_count,
+            "offline_devices": offline_count,
+            "unassigned_devices": unassigned_count
+        },
+        "devices": devices
+    }), 200
+
+
+@api_bp.route("/devices", methods=["POST"])
+def register_device():
+    """Register a new ESP hardware device."""
+    data = request.get_json(silent=True) or {}
+    dev_id = (data.get("device_id") or "").strip()
+    if not dev_id:
+        return jsonify({"status": "error", "message": "device_id is required"}), 400
+
+    try:
+        new_dev = db_instance.register_device(data)
+        return jsonify({
+            "status": "success",
+            "message": f"Device '{new_dev['device_id']}' registered successfully",
+            "device": new_dev
+        }), 201
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@api_bp.route("/devices/<device_id>/assign", methods=["PUT", "POST"])
+def assign_device(device_id):
+    """Assign or reassign an ESP device to a specific bus."""
+    data = request.get_json(silent=True) or {}
+    bus_id = data.get("bus_id")
+
+    try:
+        updated_dev = db_instance.assign_device_to_bus(device_id, bus_id)
+        return jsonify({
+            "status": "success",
+            "message": f"Device '{device_id}' assigned to '{bus_id or 'Unassigned'}'",
+            "device": updated_dev
+        }), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@api_bp.route("/devices/<device_id>", methods=["DELETE"])
+def delete_device(device_id):
+    """Delete an ESP device."""
+    success = db_instance.delete_device(device_id)
+    if not success:
+        return jsonify({"status": "error", "message": f"Device '{device_id}' not found"}), 404
+    return jsonify({
+        "status": "success",
+        "message": f"Device '{device_id}' deleted successfully"
+    }), 200
+
+
+@api_bp.route("/devices/<device_id>", methods=["PUT"])
+def update_device_info(device_id):
+    """Update device metadata (device_name, device_type, mac_address, firmware_version)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        updated = db_instance.update_device(device_id, data)
+        if not updated:
+            return jsonify({"status": "error", "message": f"Device '{device_id}' not found"}), 404
+        return jsonify({
+            "status": "success",
+            "message": f"Device '{device_id}' updated successfully",
+            "device": updated
+        }), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+SUPPORTED_DEVICE_TYPES = [
+    {
+        "type": "ESP8266",
+        "name": "ESP8266 NodeMCU / D1 Mini",
+        "category": "Wi-Fi Microcontroller",
+        "baud_rate": 9600,
+        "default_gps_rx": "D2 (GPIO4)",
+        "default_gps_tx": "D1 (GPIO5)",
+        "protocol": "UDIP v1.0 (HTTP/HTTPS)"
+    },
+    {
+        "type": "ESP32",
+        "name": "ESP32 DevKit / WROOM / S3",
+        "category": "Dual-Core Wi-Fi / Bluetooth Microcontroller",
+        "baud_rate": 9600,
+        "default_gps_rx": "GPIO16 (RX2)",
+        "default_gps_tx": "GPIO17 (TX2)",
+        "protocol": "UDIP v1.0 (HTTP/HTTPS)"
+    },
+    {
+        "type": "ARDUINO_CELLULAR",
+        "name": "Arduino + 4G LTE Modem (A7670C / SIM7600)",
+        "category": "Cellular IoT",
+        "baud_rate": 9600,
+        "default_gps_rx": "Pin 10 / AT GNSS",
+        "default_gps_tx": "Pin 11 / AT GNSS",
+        "protocol": "UDIP v1.0 (HTTP GET/POST)"
+    },
+    {
+        "type": "ARDUINO_AVR",
+        "name": "Arduino Uno / Mega / Nano + GPS Shield",
+        "category": "AVR Microcontroller",
+        "baud_rate": 9600,
+        "default_gps_rx": "Pin 4",
+        "default_gps_tx": "Pin 3",
+        "protocol": "UDIP v1.0 (Lightweight Query String)"
+    },
+    {
+        "type": "STM32",
+        "name": "STM32 ARM Cortex-M + Wi-Fi/Cellular",
+        "category": "32-Bit ARM Microcontroller",
+        "baud_rate": 9600,
+        "default_gps_rx": "PA3 (USART2 RX)",
+        "default_gps_tx": "PA2 (USART2 TX)",
+        "protocol": "UDIP v1.0 (HTTP/HTTPS)"
+    },
+    {
+        "type": "RPI_PICO",
+        "name": "Raspberry Pi Pico W",
+        "category": "RP2040 Wi-Fi Microcontroller",
+        "baud_rate": 9600,
+        "default_gps_rx": "GP1 (UART0 RX)",
+        "default_gps_tx": "GP0 (UART0 TX)",
+        "protocol": "UDIP v1.0 (HTTP/HTTPS)"
+    },
+    {
+        "type": "OTHER",
+        "name": "Generic Hardware Tracker / Telemetry Gateway",
+        "category": "Custom Telemetry Terminal",
+        "baud_rate": 9600,
+        "default_gps_rx": "UART RX",
+        "default_gps_tx": "UART TX",
+        "protocol": "UDIP v1.0"
+    }
+]
+
+
+@api_bp.route("/devices/types", methods=["GET"])
+def get_supported_device_types():
+    """List all supported hardware microcontroller platforms and pinout presets."""
+    return jsonify({
+        "status": "success",
+        "count": len(SUPPORTED_DEVICE_TYPES),
+        "types": SUPPORTED_DEVICE_TYPES
+    }), 200
+
+
+@api_bp.route("/devices/provision", methods=["POST"])
+def provision_device():
+    """
+    Universal Device Provisioning & Handshake Endpoint (UDIP v1.0).
+    Allows any supported hardware microcontroller to self-announce, authenticate,
+    and receive its configuration, device token, and assigned bus mapping.
+    """
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
+    dev_id = str(data.get("device_id") or data.get("deviceId") or "").strip().upper()
+    mac = str(data.get("mac_address") or data.get("mac") or "").strip().upper()
+    dev_type = str(data.get("device_type") or data.get("deviceType") or "ESP8266").strip().upper()
+    dev_name = str(data.get("device_name") or data.get("deviceName") or "").strip()
+    firmware = str(data.get("firmware_version") or data.get("firmwareVersion") or "3.2.0").strip()
+
+    api_key = (
+        data.get("api_key")
+        or data.get("apiKey")
+        or request.headers.get("X-API-KEY")
+        or request.args.get("apiKey")
+        or request.args.get("api_key")
+    )
+
+    settings = db_instance.get_settings()
+    configured_key = current_app.config.get("API_KEY") or settings.get("api_key")
+
+    if not dev_id:
+        if mac and mac != "UNKNOWN":
+            dev_id = f"{dev_type}-{mac.replace(':', '')[-6:]}"
+        else:
+            return jsonify({"status": "error", "message": "device_id or mac_address is required"}), 400
+
+    # Authenticate provisioning request against fleet API key
+    if api_key and api_key != configured_key:
+        return jsonify({"status": "error", "message": "Invalid fleet API key for provisioning"}), 401
+
+    # Check if already registered
+    existing = db_instance.get_device(dev_id) or (db_instance.get_device_by_mac(mac) if mac else None)
+    if not existing:
+        dev = db_instance.auto_discover_device(
+            device_id=dev_id,
+            mac=mac or None,
+            device_type=dev_type,
+            device_name=dev_name or f"{dev_type} Tracker ({dev_id})",
+            firmware_version=firmware,
+            ip_address=request.remote_addr
+        )
+        status_code = 201
+    else:
+        dev = existing
+        update_data = {}
+        if dev_name:
+            update_data["device_name"] = dev_name
+        if dev_type:
+            update_data["device_type"] = dev_type
+        if firmware:
+            update_data["firmware_version"] = firmware
+        if update_data:
+            dev = db_instance.update_device(dev.get("device_id"), update_data) or dev
+        status_code = 200
+
+    assigned_bus_id = dev.get("assigned_bus_id")
+    bus_number_req = str(data.get("bus_number") or data.get("bus_id") or data.get("busNumber") or "").strip().upper()
+    if bus_number_req and not assigned_bus_id:
+        target_bus = Bus.find_by_id(bus_number_req) or Bus.find_by_device_id(bus_number_req)
+        if not target_bus:
+            for b in Bus.get_all(active_only=False):
+                if b.bus_number.strip().upper() == bus_number_req:
+                    target_bus = b
+                    break
+        if not target_bus:
+            target_bus = Bus(
+                bus_id=bus_number_req,
+                bus_name=f"College Bus {bus_number_req}",
+                bus_number=bus_number_req,
+                device_id=dev.get("device_id"),
+                route_id="ROUTE-01",
+                route_name="Route 01: Campus Main",
+                driver_name="Unassigned",
+                driver_phone="N/A",
+                capacity=50,
+                campus="Sphoorthy Campus Lead",
+                is_active=True
+            )
+            target_bus.save()
+
+        if target_bus:
+            db_instance.assign_device_to_bus(dev.get("device_id"), target_bus.bus_id)
+            assigned_bus_id = target_bus.bus_id
+            dev["assigned_bus_id"] = assigned_bus_id
+
+    bus_info = None
+    if assigned_bus_id:
+        b = Bus.find_by_id(assigned_bus_id)
+        if b:
+            bus_info = {
+                "bus_id": b.bus_id,
+                "bus_name": b.bus_name,
+                "bus_number": b.bus_number,
+                "route_name": b.route_name
+            }
+
+    return jsonify({
+        "status": "success",
+        "message": "Device provisioned successfully",
+        "device": {
+            "device_id": dev.get("device_id"),
+            "device_name": dev.get("device_name"),
+            "mac_address": dev.get("mac_address"),
+            "device_type": dev.get("device_type"),
+            "device_token": dev.get("device_token"),
+            "firmware_version": dev.get("firmware_version"),
+            "assigned_bus_id": assigned_bus_id,
+            "auto_discovered": dev.get("auto_discovered", False),
+            "assigned_bus": bus_info
+        },
+        "configuration": {
+            "report_interval_seconds": 5,
+            "offline_threshold_seconds": int(settings.get("online_threshold_seconds", 30)),
+            "geofence_radius_meters": int(settings.get("geofence_radius_meters", 75)),
+            "protocol_version": "UDIP/1.0",
+            "server_time": datetime.now(timezone.utc).isoformat()
+        }
+    }), status_code
+
+
 @api_bp.route("/buses", methods=["GET"])
 def get_buses():
     """
@@ -336,18 +626,20 @@ def get_bus_journeys(bus_id):
     }), 200
 
 
+@api_bp.route("/devices/telemetry", methods=["GET", "POST"])
 @api_bp.route("/locations/save", methods=["GET", "POST"])
 @api_bp.route("/location", methods=["GET", "POST"])
 def save_location():
     """
-    Main Hardware GPS Receiver API endpoint.
-    Receives telemetry from ESP8266 NodeMCU, SIMCom A7670C, or simulator.
+    Universal Device Telemetry Receiver & GPS Ingestion API endpoint (UDIP v1.0).
+    Receives telemetry from ESP8266 NodeMCU, ESP32, SIMCom A7670C, Arduino AVR,
+    Raspberry Pi Pico W, STM32, or test simulator.
     """
     json_data = request.get_json(silent=True) or {}
     args = request.args
     form = request.form
 
-    # Extract API Key
+    # Extract API Key or Device Token
     apikey = (
         args.get("apikey")
         or args.get("apiKey")
@@ -357,6 +649,21 @@ def save_location():
         or json_data.get("api_key")
         or request.headers.get("X-API-KEY")
     )
+
+    device_token = (
+        args.get("device_token")
+        or args.get("deviceToken")
+        or args.get("token")
+        or json_data.get("device_token")
+        or json_data.get("deviceToken")
+        or json_data.get("token")
+        or request.headers.get("X-Device-Token")
+    )
+
+    auth_header = request.headers.get("Authorization", "")
+    bearer_token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else None
+
+    credential = apikey or device_token or bearer_token
 
     # Extract Device ID / Bus ID
     device_id_raw = (
@@ -372,6 +679,29 @@ def save_location():
         or form.get("deviceId")
         or form.get("bus_no")
     )
+
+    # 1. Validate deviceId / bus number
+    if not device_id_raw or not isinstance(device_id_raw, str) or not device_id_raw.strip():
+        return jsonify({"success": False, "status": "error", "message": "Missing deviceId (Bus Number)"}), 400
+
+    device_id_clean = device_id_raw.strip()
+
+    # 2. Validate Authentication Credentials (Fleet API Key or Per-Device Token)
+    settings = db_instance.get_settings()
+    configured_api_key = current_app.config.get("API_KEY") or settings.get("api_key")
+
+    is_authorized = False
+    if credential:
+        if credential == configured_api_key:
+            is_authorized = True
+        elif db_instance.verify_device_credentials(device_id_clean, credential):
+            is_authorized = True
+    else:
+        if verify_device_auth():
+            is_authorized = True
+
+    if not is_authorized:
+        return jsonify({"success": False, "status": "error", "message": "Invalid or unauthorized device credentials"}), 401
 
     raw_lat = (
         args.get("latitude")
@@ -422,21 +752,80 @@ def save_location():
         or json_data.get("status")
     )
 
-    # 1. Validate API key
-    settings = db_instance.get_settings()
-    configured_api_key = current_app.config.get("API_KEY") or settings.get("api_key")
-    if apikey:
-        if apikey != configured_api_key:
-            return jsonify({"success": False, "status": "error", "message": "Invalid API key"}), 401
-    else:
-        if not verify_device_auth():
-            return jsonify({"success": False, "status": "error", "message": "Unauthorized device credentials"}), 401
+    raw_mac = (
+        args.get("mac")
+        or args.get("mac_address")
+        or json_data.get("mac")
+        or json_data.get("mac_address")
+        or form.get("mac")
+    )
 
-    # 2. Validate deviceId / bus number
-    if not device_id_raw or not isinstance(device_id_raw, str) or not device_id_raw.strip():
-        return jsonify({"success": False, "status": "error", "message": "Missing deviceId (Bus Number)"}), 400
+    raw_device_type = (
+        args.get("device_type")
+        or args.get("deviceType")
+        or json_data.get("device_type")
+        or json_data.get("deviceType")
+        or form.get("device_type")
+        or "ESP8266"
+    )
 
-    device_id_clean = device_id_raw.strip()
+    raw_device_name = (
+        args.get("deviceName")
+        or args.get("device_name")
+        or json_data.get("deviceName")
+        or json_data.get("device_name")
+    )
+
+    raw_firmware_version = (
+        args.get("firmwareVersion")
+        or args.get("firmware_version")
+        or json_data.get("firmwareVersion")
+        or json_data.get("firmware_version")
+    )
+
+    raw_wifi_rssi = (
+        args.get("wifi_rssi")
+        or args.get("rssi")
+        or json_data.get("wifi_rssi")
+        or json_data.get("rssi")
+    )
+
+    raw_battery_mv = (
+        args.get("battery_mv")
+        or args.get("battery")
+        or args.get("vbat")
+        or json_data.get("battery_mv")
+        or json_data.get("battery")
+        or json_data.get("vbat")
+    )
+
+    raw_uptime = (
+        args.get("uptime_seconds")
+        or args.get("uptime")
+        or json_data.get("uptime_seconds")
+        or json_data.get("uptime")
+    )
+
+    wifi_rssi = None
+    if raw_wifi_rssi is not None:
+        try:
+            wifi_rssi = int(raw_wifi_rssi)
+        except (ValueError, TypeError):
+            wifi_rssi = None
+
+    battery_mv = None
+    if raw_battery_mv is not None:
+        try:
+            battery_mv = int(raw_battery_mv)
+        except (ValueError, TypeError):
+            battery_mv = None
+
+    uptime_seconds = None
+    if raw_uptime is not None:
+        try:
+            uptime_seconds = int(raw_uptime)
+        except (ValueError, TypeError):
+            uptime_seconds = None
 
     # 3. Validate coordinates
     if raw_lat is None or raw_lng is None:
@@ -474,24 +863,176 @@ def save_location():
     now = datetime.now(timezone.utc)
 
     # 4. Find or auto-associate Bus with Device ID
-    bus = Bus.find_by_device_id(device_id_clean) or Bus.find_by_id(device_id_clean)
+    matched_dev = None
+    all_devs = db_instance.get_all_devices(compute_status=False)
+    for d in all_devs:
+        d_id = str(d.get("device_id", "")).strip().upper()
+        d_mac = str(d.get("mac_address", "")).strip().upper()
+        if d_id == device_id_clean.upper() or (raw_mac and d_mac == str(raw_mac).strip().upper()):
+            matched_dev = d
+            break
+
+    # If device was explicitly registered or auto-discovered as unassigned:
+    raw_bus_number = (
+        args.get("bus_number")
+        or args.get("bus_no")
+        or args.get("busNumber")
+        or json_data.get("bus_number")
+        or json_data.get("bus_no")
+        or json_data.get("busNumber")
+    )
+    if matched_dev and matched_dev.get("is_registered") and not matched_dev.get("assigned_bus_id"):
+        if raw_bus_number and str(raw_bus_number).strip():
+            b_num = str(raw_bus_number).strip().upper()
+            target_bus = Bus.find_by_id(b_num) or Bus.find_by_device_id(b_num)
+            if not target_bus:
+                for b in Bus.get_all(active_only=False):
+                    if b.bus_number.strip().upper() == b_num:
+                        target_bus = b
+                        break
+            if not target_bus:
+                target_bus = Bus(
+                    bus_id=b_num,
+                    bus_name=f"College Bus {b_num}",
+                    bus_number=b_num,
+                    device_id=matched_dev.get("device_id"),
+                    route_id="ROUTE-01",
+                    route_name="Route 01: Campus Main",
+                    driver_name="Unassigned",
+                    driver_phone="N/A",
+                    capacity=50,
+                    campus="Sphoorthy Campus Lead",
+                    is_active=True
+                )
+                target_bus.save()
+
+            db_instance.assign_device_to_bus(matched_dev.get("device_id"), target_bus.bus_id)
+            matched_dev["assigned_bus_id"] = target_bus.bus_id
+        else:
+            db_instance.touch_device_seen(
+                device_id=device_id_clean,
+                mac=raw_mac,
+                device_type=raw_device_type,
+                ip_address=request.remote_addr,
+                gps_status=raw_gps_status or "valid",
+                device_name=raw_device_name,
+                firmware_version=raw_firmware_version,
+                wifi_rssi=wifi_rssi,
+                battery_mv=battery_mv,
+                uptime_seconds=uptime_seconds
+            )
+            db_instance.update_device_health(device_id_clean, {
+                "bus_id": None,
+                "satellites": int(raw_satellites) if raw_satellites is not None else 8,
+                "accuracy": float(raw_accuracy) if raw_accuracy is not None else 1.5,
+                "altitude": float(raw_altitude) if raw_altitude is not None else 500.0,
+                "gps_status": raw_gps_status or "valid",
+                "ip_address": request.remote_addr,
+                "latitude": latitude,
+                "longitude": longitude
+            })
+            return jsonify({
+                "success": True,
+                "status": "unassigned",
+                "message": f"Device '{device_id_clean}' is unassigned. Please map it to a bus in Device Management.",
+                "data": {
+                    "deviceId": device_id_clean,
+                    "mac": raw_mac,
+                    "status": "unassigned",
+                    "gps_status": raw_gps_status or "valid"
+                }
+            }), 200
+
+    # Look up bus: 1) from matched device's assigned_bus_id, 2) by device_id or mac, 3) by bus_id
+    bus = None
+    if matched_dev and matched_dev.get("assigned_bus_id"):
+        bus = Bus.find_by_id(matched_dev["assigned_bus_id"])
+
     if not bus:
-        bus = Bus(
-            bus_id=device_id_clean.upper(),
-            bus_name=f"College Bus {device_id_clean.upper()}",
-            bus_number=device_id_clean.upper(),
-            device_id=device_id_clean.upper(),
-            route_name=f"Route 01: Campus Main",
-            route_id="ROUTE-01",
-            driver_name="Unassigned",
-            driver_phone="N/A",
-            capacity=50,
-            campus="Sphoorthy Campus Lead",
-            is_active=True
-        )
-        bus.save()
+        bus = Bus.find_by_device_id(device_id_clean) or Bus.find_by_id(device_id_clean)
+        if not bus and raw_mac:
+            bus = Bus.find_by_device_id(raw_mac)
+
+    if not bus:
+        # Check if request came to /devices/telemetry or requested auto-discovery
+        is_telemetry_endpoint = request.path.endswith("/telemetry")
+        auto_disc_param = args.get("auto_discover") or json_data.get("auto_discover")
+
+        if is_telemetry_endpoint or auto_disc_param:
+            new_dev = db_instance.auto_discover_device(
+                device_id=device_id_clean,
+                mac=raw_mac,
+                device_type=raw_device_type,
+                device_name=raw_device_name,
+                firmware_version=raw_firmware_version,
+                ip_address=request.remote_addr
+            )
+            db_instance.touch_device_seen(
+                device_id=device_id_clean,
+                mac=raw_mac,
+                device_type=raw_device_type,
+                ip_address=request.remote_addr,
+                gps_status=raw_gps_status or "valid",
+                device_name=raw_device_name,
+                firmware_version=raw_firmware_version,
+                wifi_rssi=wifi_rssi,
+                battery_mv=battery_mv,
+                uptime_seconds=uptime_seconds
+            )
+            db_instance.update_device_health(device_id_clean, {
+                "bus_id": None,
+                "satellites": int(raw_satellites) if raw_satellites is not None else 8,
+                "accuracy": float(raw_accuracy) if raw_accuracy is not None else 1.5,
+                "altitude": float(raw_altitude) if raw_altitude is not None else 500.0,
+                "gps_status": raw_gps_status or "valid",
+                "ip_address": request.remote_addr,
+                "latitude": latitude,
+                "longitude": longitude
+            })
+            return jsonify({
+                "success": True,
+                "status": "unassigned",
+                "message": f"Device '{device_id_clean}' was auto-discovered and registered. Please map it to a bus in Device Management.",
+                "data": {
+                    "deviceId": device_id_clean,
+                    "mac": raw_mac,
+                    "status": "unassigned",
+                    "auto_discovered": True
+                }
+            }), 200
+        else:
+            # Auto-create bus for legacy / direct test pings
+            bus = Bus(
+                bus_id=device_id_clean.upper(),
+                bus_name=f"College Bus {device_id_clean.upper()}",
+                bus_number=device_id_clean.upper(),
+                device_id=device_id_clean.upper(),
+                route_name=f"Route 01: Campus Main",
+                route_id="ROUTE-01",
+                driver_name="Unassigned",
+                driver_phone="N/A",
+                capacity=50,
+                campus="Sphoorthy Campus Lead",
+                is_active=True
+            )
+            bus.save()
 
     bus_id = bus.bus_id
+
+    # Touch device seen with assigned bus
+    db_instance.touch_device_seen(
+        device_id=device_id_clean,
+        mac=raw_mac,
+        device_type=raw_device_type,
+        ip_address=request.remote_addr,
+        gps_status=raw_gps_status or "valid",
+        assigned_bus_id=bus_id,
+        device_name=raw_device_name,
+        firmware_version=raw_firmware_version,
+        wifi_rssi=wifi_rssi,
+        battery_mv=battery_mv,
+        uptime_seconds=uptime_seconds
+    )
 
     # 5. Parse and calculate Speed and Heading
     speed = None
@@ -680,14 +1221,24 @@ def save_location():
     )
 
     # 10. Update Device Health Diagnostics
-    db_instance.update_device_health(bus.device_id, {
+    health_payload = {
         "bus_id": bus_id,
         "satellites": satellites,
         "accuracy": accuracy,
         "altitude": altitude,
         "gps_status": gps_status,
-        "ip_address": request.remote_addr
-    })
+        "ip_address": request.remote_addr,
+        "latitude": latitude,
+        "longitude": longitude
+    }
+    if wifi_rssi is not None:
+        health_payload["wifi_rssi"] = wifi_rssi
+    if battery_mv is not None:
+        health_payload["battery_mv"] = battery_mv
+    if uptime_seconds is not None:
+        health_payload["uptime_seconds"] = uptime_seconds
+
+    db_instance.update_device_health(bus.device_id, health_payload)
 
     return jsonify({
         "success": True,
@@ -706,6 +1257,9 @@ def save_location():
             "satellites": satellites,
             "accuracy": accuracy,
             "gps_status": gps_status,
+            "wifi_rssi": wifi_rssi,
+            "battery_mv": battery_mv,
+            "uptime_seconds": uptime_seconds,
             "date": saved_location["date"],
             "time": saved_location["time"],
             "timestamp": saved_location["timestamp"],

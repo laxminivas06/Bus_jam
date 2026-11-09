@@ -66,8 +66,9 @@ def calculate_heading_and_distance(lat1, lon1, lat2, lon2):
 
 
 class BusSimulatorInstance:
-    def __init__(self, bus_id, waypoints, should_deviate=False):
+    def __init__(self, bus_id, waypoints, mac=None, should_deviate=False):
         self.bus_id = bus_id
+        self.mac = mac or f"AA:BB:CC:11:22:{abs(hash(bus_id)) % 250:02X}"
         self.waypoints = waypoints
         self.segment_index = 0
         self.progress = 0.0  # 0.0 to 1.0 along current segment
@@ -124,6 +125,8 @@ class BusSimulatorInstance:
 
         return {
             "deviceId": self.bus_id,
+            "mac": self.mac,
+            "device_type": "ESP8266",
             "latitude": round(curr_lat, 6),
             "longitude": round(curr_lng, 6),
             "apiKey": API_KEY,
@@ -136,23 +139,35 @@ class BusSimulatorInstance:
         }
 
 
-def generate_bus_waypoints(count=25):
-    """Assign waypoints for N buses based on route templates."""
-    bus_waypoints = {}
+DEFAULT_CAMPUS_DEVICES = [
+    ("ESP8266-BUS-01", "AA:BB:CC:11:22:01"),
+    ("ESP8266-BUS-02", "AA:BB:CC:11:22:02"),
+    ("ESP8266-BUS-03", "AA:BB:CC:11:22:03"),
+    ("ESP8266-BUS-04", "AA:BB:CC:11:22:04"),
+]
+
+
+def generate_bus_waypoints(count=4):
+    """Assign waypoints for N buses based on route templates and mapped ESP devices."""
+    bus_configs = []
     for i in range(1, count + 1):
-        # First bus can be named 'bus-01' to match ESP8266 hardware, rest BUS002..
-        bus_id = "bus-01" if i == 1 else f"BUS{i:03d}"
+        if i <= len(DEFAULT_CAMPUS_DEVICES):
+            dev_id, dev_mac = DEFAULT_CAMPUS_DEVICES[i - 1]
+        else:
+            dev_id = f"BUS{i:03d}"
+            dev_mac = f"AA:BB:CC:11:22:{i:02X}"
+
         route_template = ROUTES[(i - 1) % len(ROUTES)]
         # Add slight variation per bus so they don't overlap exactly
         offset_lat = ((i * 7) % 15 - 7) * 0.0012
         offset_lng = ((i * 11) % 15 - 7) * 0.0012
 
         bus_route = [(lat + offset_lat, lng + offset_lng) for lat, lng in route_template]
-        bus_waypoints[bus_id] = bus_route
-    return bus_waypoints
+        bus_configs.append((dev_id, dev_mac, bus_route))
+    return bus_configs
 
 
-def run_simulator(bus_count=25, interval=5, single_bus_id=None, test_deviation=True):
+def run_simulator(bus_count=4, interval=5, single_bus_id=None, test_deviation=True):
     """
     Main simulator execution loop.
     Emulates physical GNSS tracker transmissions (ESP8266 & SIMCom A7670C) via HTTP GET query parameters.
@@ -162,16 +177,16 @@ def run_simulator(bus_count=25, interval=5, single_bus_id=None, test_deviation=T
     print(f"  Target Endpoint  : {API_URL}")
     print(f"  Update Frequency : Every {interval} seconds")
     print(f"  Simulated Buses  : {1 if single_bus_id else bus_count}")
-    print(f"  Route Deviation  : Enabled on BUS005" if test_deviation else "  Route Deviation  : Disabled")
+    print(f"  Route Deviation  : Enabled on BUS-04" if test_deviation else "  Route Deviation  : Disabled")
     print("=" * 75)
 
     if single_bus_id:
         simulators = [BusSimulatorInstance(single_bus_id, ROUTES[0], should_deviate=test_deviation)]
     else:
-        bus_routes = generate_bus_waypoints(bus_count)
+        configs = generate_bus_waypoints(bus_count)
         simulators = [
-            BusSimulatorInstance(bus_id, waypoints, should_deviate=(bus_id == "BUS005" and test_deviation))
-            for bus_id, waypoints in bus_routes.items()
+            BusSimulatorInstance(dev_id, waypoints, mac=dev_mac, should_deviate=("04" in dev_id and test_deviation))
+            for dev_id, dev_mac, waypoints in configs
         ]
 
     cycle = 1

@@ -65,6 +65,11 @@
                     <span id="syncStatusLabel">Live GPS (5s)</span>
                 </div>
 
+                <!-- ESP Devices Management Button -->
+                <button class="btn btn-outline btn-sm" id="openDevicesModalBtn" title="Manage ESP8266 / ESP32 Hardware Trackers">
+                    <i class="fa-solid fa-microchip"></i> ESP Devices <span class="header-counter-badge" id="devicesHeaderBadge">0</span>
+                </button>
+
                 <!-- Simple Register Bus Button -->
                 <button class="btn btn-primary btn-sm" id="openRegisterModalBtn" title="Register New Bus / ESP Device">
                     <i class="fa-solid fa-plus"></i> Register Bus
@@ -139,49 +144,125 @@
                     <div class="hud-header">
                         <div class="hud-bus-ident">
                             <span class="hud-bus-name" id="hudBusName">Select a Bus</span>
-                            <span class="hud-bus-number" id="hudBusNumber">TS 09 UB ----</span>
+                            <div class="hud-sub-ident">
+                                <span class="hud-bus-number" id="hudBusNumber">TS 09 UB ----</span>
+                                <span class="hud-esp-tag" id="hudEspTag" title="Assigned Hardware ESP Device">
+                                    <i class="fa-solid fa-microchip"></i> <span id="hudEspVal">--</span>
+                                </span>
+                            </div>
                         </div>
                         <span class="card-status-badge offline" id="hudConnectionBadge">Waiting Selection</span>
                     </div>
 
+                    <!-- Mode Toggle: Live Tracking vs 7-Day History -->
+                    <div class="hud-mode-switcher">
+                        <button class="mode-tab-btn active" id="btnModeLive">
+                            <i class="fa-solid fa-tower-broadcast"></i> Live View
+                        </button>
+                        <button class="mode-tab-btn" id="btnModeHistory">
+                            <i class="fa-solid fa-clock-rotate-left"></i> 7-Day History
+                        </button>
+                    </div>
+
                     <div class="hud-body">
-                        <!-- Coordinates Row with 1-Click Copy -->
-                        <div class="hud-data-row">
-                            <span class="hud-data-label"><i class="fa-solid fa-location-crosshairs"></i> GPS Coords:</span>
-                            <span class="hud-data-val mono" id="hudCoordsVal">--</span>
-                            <button class="btn-copy-coords" id="hudCopyCoordsBtn" title="Copy Coordinates">
-                                <i class="fa-solid fa-copy"></i>
-                            </button>
-                            <a href="#" target="_blank" class="hud-map-link" id="hudGoogleMapsLink" title="Open in Google Maps">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                            </a>
+                        <!-- VIEW 1: LIVE TELEMETRY SECTION -->
+                        <div class="telemetry-view-section" id="liveTelemetrySection">
+                            <!-- Coordinates Row with 1-Click Copy -->
+                            <div class="hud-data-row">
+                                <span class="hud-data-label"><i class="fa-solid fa-location-crosshairs"></i> GPS Coords:</span>
+                                <span class="hud-data-val mono" id="hudCoordsVal">--</span>
+                                <button class="btn-copy-coords" id="hudCopyCoordsBtn" title="Copy Coordinates">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <a href="#" target="_blank" class="hud-map-link" id="hudGoogleMapsLink" title="Open in Google Maps">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+                            </div>
+
+                            <!-- Telemetry Grid -->
+                            <div class="hud-metrics-grid">
+                                <div class="hud-metric-item">
+                                    <span class="metric-label">Speed</span>
+                                    <span class="metric-val" id="hudSpeedVal">0 km/h</span>
+                                </div>
+                                <div class="hud-metric-item">
+                                    <span class="metric-label">Heading</span>
+                                    <span class="metric-val" id="hudHeadingVal">0° (N)</span>
+                                </div>
+                                <div class="hud-metric-item">
+                                    <span class="metric-label">GPS Satellites</span>
+                                    <span class="metric-val" id="hudSatsVal">0 Sats</span>
+                                </div>
+                                <div class="hud-metric-item">
+                                    <span class="metric-label">Last Ping</span>
+                                    <span class="metric-val" id="hudUpdatedVal">Never</span>
+                                </div>
+                            </div>
+
+                            <!-- Current Route Row -->
+                            <div class="hud-route-row">
+                                <i class="fa-solid fa-route" style="color:var(--primary);"></i>
+                                <span>Route: <strong id="hudRouteVal">Assigned Route</strong></span>
+                            </div>
                         </div>
 
-                        <!-- Telemetry Grid -->
-                        <div class="hud-metrics-grid">
-                            <div class="hud-metric-item">
-                                <span class="metric-label">Speed</span>
-                                <span class="metric-val" id="hudSpeedVal">0 km/h</span>
+                        <!-- VIEW 2: 7-DAY ROUTE HISTORY & REPLAY SECTION -->
+                        <div class="history-view-section hidden" id="historyTelemetrySection">
+                            <!-- Date Selection Header -->
+                            <div class="history-section-header">
+                                <span class="history-sec-title"><i class="fa-solid fa-calendar-days"></i> Select Date:</span>
+                                <span class="history-note">Rolling 7-Day Window</span>
                             </div>
-                            <div class="hud-metric-item">
-                                <span class="metric-label">Heading</span>
-                                <span class="metric-val" id="hudHeadingVal">0° (N)</span>
+
+                            <!-- 7-Day Date Navigation Pills -->
+                            <div class="seven-day-nav-pills" id="sevenDayNavPills">
+                                <!-- Populated dynamically (Day 1 - Monday ... Day 7 - Sunday) -->
                             </div>
-                            <div class="hud-metric-item">
-                                <span class="metric-label">GPS Satellites</span>
-                                <span class="metric-val" id="hudSatsVal">0 Sats</span>
+
+                            <!-- Selected Day's Trip Summary -->
+                            <div class="history-summary-box" id="historySummaryBox">
+                                <div class="summary-metric">
+                                    <span class="lbl">Distance</span>
+                                    <span class="val" id="histDistVal">0.0 km</span>
+                                </div>
+                                <div class="summary-metric">
+                                    <span class="lbl">Max Speed</span>
+                                    <span class="val" id="histMaxSpeedVal">0 km/h</span>
+                                </div>
+                                <div class="summary-metric">
+                                    <span class="lbl">Stops</span>
+                                    <span class="val" id="histStopsVal">0</span>
+                                </div>
+                                <div class="summary-metric">
+                                    <span class="lbl">Waypoints</span>
+                                    <span class="val" id="histPointsVal">0</span>
+                                </div>
                             </div>
-                            <div class="hud-metric-item">
-                                <span class="metric-label">Last Ping</span>
-                                <span class="metric-val" id="hudUpdatedVal">Never</span>
+
+                            <!-- Interactive Route Replay Controls -->
+                            <div class="route-replay-controls" id="routeReplayControls">
+                                <div class="replay-actions-bar">
+                                    <button class="replay-btn play" id="replayPlayPauseBtn" title="Play / Pause Chronological Journey Replay">
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+                                    <button class="replay-btn reset" id="replayResetBtn" title="Reset to Start">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                    <input type="range" class="replay-scrubber" id="replayScrubber" min="0" max="0" value="0">
+                                    <div class="replay-speed-selector">
+                                        <button class="speed-opt-btn active" data-speed="1">1x</button>
+                                        <button class="speed-opt-btn" data-speed="2">2x</button>
+                                        <button class="speed-opt-btn" data-speed="4">4x</button>
+                                    </div>
+                                </div>
+                                <div class="replay-status-row">
+                                    <span>Time: <strong id="replayCurrentTime">--:--</strong></span>
+                                    <span>Speed: <strong id="replayCurrentSpeed">0 km/h</strong></span>
+                                    <span id="replayWaypointProgress">Point 0 / 0</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Current Route Row -->
-                        <div class="hud-route-row">
-                            <i class="fa-solid fa-route" style="color:var(--primary);"></i>
-                            <span>Route: <strong id="hudRouteVal">Assigned Route</strong></span>
-                        </div>
                     </div>
                 </div>
 
@@ -259,6 +340,114 @@
                         <i class="fa-solid fa-save"></i> Register & Connect Bus
                     </button>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- UNIVERSAL HARDWARE DEVICES MANAGEMENT MODAL -->
+    <div class="modal-backdrop hidden" id="devicesModal">
+        <div class="modal-card modal-card-wide">
+            <div class="modal-header">
+                <div>
+                    <h2><i class="fa-solid fa-microchip"></i> Universal Device Management</h2>
+                    <p class="modal-subtitle">Multi-hardware tracker registration, auto-discovery, GPS diagnostics, and bus mapping</p>
+                </div>
+                <button class="close-modal-btn" id="closeDevicesModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <!-- Device Metrics Quick Summary -->
+                <div class="device-summary-cards" id="deviceSummaryCards">
+                    <div class="device-stat-pill">
+                        <span class="stat-label">Total Devices</span>
+                        <strong class="stat-value" id="devMetricTotal">0</strong>
+                    </div>
+                    <div class="device-stat-pill success">
+                        <span class="stat-label">Online</span>
+                        <strong class="stat-value" id="devMetricOnline">0</strong>
+                    </div>
+                    <div class="device-stat-pill info">
+                        <span class="stat-label">GPS Active</span>
+                        <strong class="stat-value" id="devMetricGps">0</strong>
+                    </div>
+                    <div class="device-stat-pill warning">
+                        <span class="stat-label">Unassigned</span>
+                        <strong class="stat-value" id="devMetricUnassigned">0</strong>
+                    </div>
+                </div>
+
+                <!-- Unassigned Device Alert -->
+                <div class="unassigned-alert hidden" id="unassignedAlertBanner">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <div>
+                        <strong>Unassigned Hardware Trackers Detected!</strong>
+                        <p>Hardware devices are transmitting telemetry without a mapped bus. Assign them to a bus below to enable live bus tracking.</p>
+                    </div>
+                </div>
+
+                <!-- Registered Devices Table -->
+                <div class="devices-table-wrapper">
+                    <table class="devices-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Device Name & ID</th>
+                                <th>Platform</th>
+                                <th>MAC / Hardware ID</th>
+                                <th>GPS Fix</th>
+                                <th>Assigned Bus</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add New Hardware Device Form -->
+                <div class="register-device-section">
+                    <h3><i class="fa-solid fa-plus-circle"></i> Register Universal Hardware Tracker</h3>
+                    <form id="addDeviceForm" class="device-inline-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="devNameInput">Device Name (e.g. Bus 05 DevKit)</label>
+                                <input type="text" id="devNameInput" placeholder="Bus 05 Tracker">
+                            </div>
+                            <div class="form-group">
+                                <label for="devIdInput">Device ID (Hardware ID)</label>
+                                <input type="text" id="devIdInput" placeholder="ESP005" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="devMacInput">Hardware MAC / IMEI</label>
+                                <input type="text" id="devMacInput" placeholder="AA:BB:CC:11:22:05" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="devTypeInput">Hardware Platform</label>
+                                <select id="devTypeInput" class="form-select">
+                                    <option value="ESP8266">ESP8266 NodeMCU / D1 Mini</option>
+                                    <option value="ESP32">ESP32 DevKit / WROOM / S3</option>
+                                    <option value="ARDUINO_CELLULAR">Arduino + 4G LTE (A7670C / SIM7600)</option>
+                                    <option value="ARDUINO_AVR">Arduino Uno / Nano + GPS Shield</option>
+                                    <option value="STM32">STM32 ARM Cortex-M</option>
+                                    <option value="RPI_PICO">Raspberry Pi Pico W</option>
+                                    <option value="OTHER">Generic Telemetry Gateway</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="devBusSelect">Assign to Bus</label>
+                            <select id="devBusSelect" class="form-select">
+                                <option value="">-- Unassigned (Standby / Auto-Discovery) --</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:6px;">
+                            <i class="fa-solid fa-microchip"></i> Register Universal Tracker
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

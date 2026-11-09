@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -82,6 +83,77 @@ DEFAULT_ROUTES = [
             [17.382000, 78.482000]
         ],
         "assigned_stops": ["STOP-09", "STOP-10"]
+    }
+]
+
+DEFAULT_DEVICES = [
+    {
+        "id": 1,
+        "device_id": "ESP8266-BUS-01",
+        "device_name": "Campus Express 01 Dash Unit",
+        "mac_address": "AA:BB:CC:11:22:01",
+        "device_type": "ESP8266",
+        "firmware_version": "3.2.0",
+        "device_token": "tok_esp8266_bus01_sec9876",
+        "assigned_bus_id": "BUS-01",
+        "is_registered": True,
+        "auto_discovered": False,
+        "status": "offline",
+        "last_seen": None,
+        "ip_address": None,
+        "created_at": "2026-11-09T00:00:00+00:00",
+        "updated_at": "2026-11-09T00:00:00+00:00"
+    },
+    {
+        "id": 2,
+        "device_id": "ESP8266-BUS-02",
+        "device_name": "Campus Express 02 Dash Unit",
+        "mac_address": "AA:BB:CC:11:22:02",
+        "device_type": "ESP8266",
+        "firmware_version": "3.2.0",
+        "device_token": "tok_esp8266_bus02_sec9876",
+        "assigned_bus_id": "BUS-02",
+        "is_registered": True,
+        "auto_discovered": False,
+        "status": "offline",
+        "last_seen": None,
+        "ip_address": None,
+        "created_at": "2026-11-09T00:00:00+00:00",
+        "updated_at": "2026-11-09T00:00:00+00:00"
+    },
+    {
+        "id": 3,
+        "device_id": "ESP8266-BUS-03",
+        "device_name": "Campus Metro Shuttle Unit",
+        "mac_address": "AA:BB:CC:11:22:03",
+        "device_type": "ESP8266",
+        "firmware_version": "3.2.0",
+        "device_token": "tok_esp8266_bus03_sec9876",
+        "assigned_bus_id": "BUS-03",
+        "is_registered": True,
+        "auto_discovered": False,
+        "status": "offline",
+        "last_seen": None,
+        "ip_address": None,
+        "created_at": "2026-11-09T00:00:00+00:00",
+        "updated_at": "2026-11-09T00:00:00+00:00"
+    },
+    {
+        "id": 4,
+        "device_id": "ESP8266-BUS-04",
+        "device_name": "Campus City Liner Unit",
+        "mac_address": "AA:BB:CC:11:22:04",
+        "device_type": "ESP8266",
+        "firmware_version": "3.2.0",
+        "device_token": "tok_esp8266_bus04_sec9876",
+        "assigned_bus_id": "BUS-04",
+        "is_registered": True,
+        "auto_discovered": False,
+        "status": "offline",
+        "last_seen": None,
+        "ip_address": None,
+        "created_at": "2026-11-09T00:00:00+00:00",
+        "updated_at": "2026-11-09T00:00:00+00:00"
     }
 ]
 
@@ -203,6 +275,7 @@ class JsonDB:
             self.data_dir = base_dir / "data"
 
         self.buses_file = self.data_dir / "buses.json"
+        self.devices_file = self.data_dir / "devices.json"
         self.locations_file = self.data_dir / "locations.json"
         self.history_file = self.data_dir / "history.json"
         self.settings_file = self.data_dir / "settings.json"
@@ -225,6 +298,7 @@ class JsonDB:
 
             files_and_defaults = [
                 (self.buses_file, []),
+                (self.devices_file, DEFAULT_DEVICES),
                 (self.locations_file, {}),
                 (self.history_file, []),
                 (self.settings_file, {
@@ -300,13 +374,26 @@ class JsonDB:
         return None
 
     def get_bus_by_device_id(self, device_id):
-        """Find bus mapped to a specific ESP device ID."""
+        """Find bus mapped to a specific ESP device ID or MAC address."""
         if not device_id:
             return None
         target_raw = str(device_id).strip()
         target_upper = target_raw.upper()
         target_lower = target_raw.lower()
 
+        # 1. First check explicit mapping in registered devices.json
+        devices = self._read_json(self.devices_file, default=[])
+        for d in devices:
+            d_id = str(d.get("device_id", "")).strip().upper()
+            d_mac = str(d.get("mac_address", "")).strip().upper()
+            if d_id == target_upper or (d_mac and d_mac == target_upper):
+                assigned_bus_id = d.get("assigned_bus_id")
+                if assigned_bus_id:
+                    bus = self.get_bus(assigned_bus_id)
+                    if bus:
+                        return bus
+
+        # 2. Check buses.json directly
         buses = self.get_all_buses()
         for b in buses:
             b_dev = str(b.get("device_id", "")).strip().lower()
@@ -393,6 +480,426 @@ class JsonDB:
             self._write_json(self.history_file, history_filtered)
 
             return True
+
+    # -------------------------------------------------------------------------
+    # ESP DEVICE REGISTRATION & IDENTIFICATION
+    # -------------------------------------------------------------------------
+    def get_all_devices(self, compute_status=True):
+        """
+        Return list of all registered ESP hardware devices.
+        If compute_status=True, calculates online/connecting/offline status dynamically.
+        """
+        devices = self._read_json(self.devices_file, default=[])
+        if not compute_status:
+            return devices
+
+        now = datetime.now(timezone.utc)
+        settings = self.get_settings()
+        threshold = int(settings.get("online_threshold_seconds", 30))
+        buses = {b.get("bus_id", "").upper(): b for b in self.get_all_buses()}
+
+        enriched = []
+        for d in devices:
+            dev = dict(d)
+            last_seen_str = dev.get("last_seen")
+            status = "offline"
+            status_label = "Offline"
+            is_online = False
+            last_seen_relative = "Never"
+
+            if last_seen_str:
+                try:
+                    ls_dt = datetime.fromisoformat(last_seen_str)
+                    if ls_dt.tzinfo is None:
+                        ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                    elapsed = (now - ls_dt).total_seconds()
+
+                    if elapsed < 5:
+                        last_seen_relative = "Just now"
+                    elif elapsed < 60:
+                        last_seen_relative = f"{int(elapsed)}s ago"
+                    elif elapsed < 3600:
+                        last_seen_relative = f"{int(elapsed // 60)}m ago"
+                    else:
+                        last_seen_relative = f"{int(elapsed // 3600)}h ago"
+
+                    health = self.get_device_health(dev.get("device_id")) or {}
+                    gps_status = health.get("gps_status", "valid")
+
+                    if elapsed <= threshold:
+                        if gps_status in ["no_fix", "invalid"]:
+                            status = "connecting"
+                            status_label = "Acquiring GPS"
+                            is_online = True
+                        else:
+                            status = "online"
+                            status_label = "Online"
+                            is_online = True
+                    elif elapsed <= 60:
+                        status = "connecting"
+                        status_label = "Connecting"
+                        is_online = False
+                    else:
+                        status = "offline"
+                        status_label = "Offline"
+                        is_online = False
+                except Exception:
+                    pass
+
+            dev["status"] = status
+            dev["status_label"] = status_label
+            dev["is_online"] = is_online
+            dev["last_seen_relative"] = last_seen_relative
+
+            # Universal Device Identity & Diagnostics
+            dev["device_name"] = dev.get("device_name") or f"{dev.get('device_type', 'ESP')} Tracker ({dev.get('device_id')})"
+            dev["firmware_version"] = dev.get("firmware_version") or "3.2.0"
+            dev["auto_discovered"] = bool(dev.get("auto_discovered", False))
+            dev["device_token"] = dev.get("device_token") or f"tok_{str(dev.get('device_id', '')).lower()}_sec"
+
+            # Compute GPS Availability
+            health = self.get_device_health(dev.get("device_id")) or {}
+            satellites = health.get("satellites") if health.get("satellites") is not None else 0
+            gps_st = health.get("gps_status", "valid")
+            gps_available = False
+            if is_online and gps_st not in ["no_fix", "invalid"]:
+                if satellites >= 3 or health.get("latitude") is not None:
+                    gps_available = True
+            dev["gps_available"] = gps_available
+
+            # Enrich with assigned bus details
+            assigned_bus_id = dev.get("assigned_bus_id")
+            if assigned_bus_id and str(assigned_bus_id).upper() in buses:
+                b = buses[str(assigned_bus_id).upper()]
+                dev["assigned_bus_name"] = b.get("bus_name")
+                dev["assigned_bus_number"] = b.get("bus_number")
+            else:
+                dev["assigned_bus_name"] = "Unassigned"
+                dev["assigned_bus_number"] = "None"
+
+            enriched.append(dev)
+
+        return enriched
+
+    def get_device(self, device_id):
+        """Find a single device by device_id."""
+        if not device_id:
+            return None
+        target = str(device_id).strip().upper()
+        devices = self.get_all_devices(compute_status=True)
+        for d in devices:
+            if str(d.get("device_id", "")).strip().upper() == target:
+                return d
+        return None
+
+    def get_device_by_mac(self, mac_address):
+        """Find a device by MAC address."""
+        if not mac_address:
+            return None
+        target = str(mac_address).strip().upper()
+        devices = self.get_all_devices(compute_status=True)
+        for d in devices:
+            if str(d.get("mac_address", "")).strip().upper() == target:
+                return d
+        return None
+
+    def get_device_by_token(self, device_token):
+        """Find a device by its unique authentication token."""
+        if not device_token:
+            return None
+        target = str(device_token).strip()
+        devices = self.get_all_devices(compute_status=True)
+        for d in devices:
+            if d.get("device_token") and str(d.get("device_token")).strip() == target:
+                return d
+        return None
+
+    def verify_device_credentials(self, device_id, key_or_token):
+        """
+        Authenticate device against:
+        1. Pre-shared fleet API Key (from settings.json or env).
+        2. Per-device specific Device Token in devices.json.
+        """
+        if not key_or_token:
+            return False
+
+        settings = self.get_settings()
+        configured_key = settings.get("api_key")
+        if configured_key and key_or_token == configured_key:
+            return True
+
+        if device_id:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            for d in devices:
+                if str(d.get("device_id", "")).strip().upper() == target:
+                    dev_tok = d.get("device_token")
+                    if dev_tok and dev_tok == key_or_token:
+                        return True
+
+        devices = self._read_json(self.devices_file, default=[])
+        for d in devices:
+            if d.get("device_token") and d.get("device_token") == key_or_token:
+                return True
+
+        return False
+
+    def register_device(self, device_data):
+        """
+        Register a new universal device with identity, MAC, chip type, and token.
+        Enforces unique device_id and unique mac_address.
+        """
+        with _LOCK:
+            dev_id = str(device_data.get("device_id") or "").strip().upper()
+            if not dev_id:
+                raise ValueError("device_id is required")
+
+            devices = self._read_json(self.devices_file, default=[])
+
+            # Check duplicate device_id
+            for d in devices:
+                if str(d.get("device_id", "")).strip().upper() == dev_id:
+                    raise ValueError(f"Device ID '{dev_id}' is already registered")
+
+            mac_address = str(device_data.get("mac_address") or "").strip().upper()
+            if mac_address and mac_address not in ["UNKNOWN", ""]:
+                for d in devices:
+                    d_mac = str(d.get("mac_address", "")).strip().upper()
+                    if d_mac and d_mac == mac_address:
+                        raise ValueError(f"MAC address '{mac_address}' is already registered to device '{d.get('device_id')}'")
+
+            assigned_bus_id = device_data.get("assigned_bus_id")
+            if assigned_bus_id:
+                assigned_bus_id = str(assigned_bus_id).strip().upper()
+                # Verify bus exists
+                bus = self.get_bus(assigned_bus_id)
+                if not bus:
+                    raise ValueError(f"Bus '{assigned_bus_id}' does not exist")
+                # Unassign any previous device assigned to this bus
+                for d in devices:
+                    if str(d.get("assigned_bus_id", "")).strip().upper() == assigned_bus_id:
+                        d["assigned_bus_id"] = None
+                # Update the bus's device_id
+                self.update_bus(assigned_bus_id, {"device_id": dev_id})
+            else:
+                assigned_bus_id = None
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            dev_type = str(device_data.get("device_type", "ESP8266")).strip().upper()
+            dev_name = device_data.get("device_name") or f"{dev_type} Tracker {dev_id}"
+            firmware_ver = str(device_data.get("firmware_version") or "3.2.0").strip()
+            token = device_data.get("device_token") or f"tok_{dev_id.lower()}_{uuid.uuid4().hex[:10]}"
+
+            new_dev = {
+                "id": len(devices) + 1,
+                "device_id": dev_id,
+                "device_name": dev_name,
+                "mac_address": mac_address or "AA:BB:CC:00:00:00",
+                "device_type": dev_type,
+                "firmware_version": firmware_ver,
+                "device_token": token,
+                "assigned_bus_id": assigned_bus_id,
+                "is_registered": True,
+                "auto_discovered": False,
+                "status": "offline",
+                "last_seen": None,
+                "ip_address": device_data.get("ip_address"),
+                "created_at": now_iso,
+                "updated_at": now_iso
+            }
+
+            devices.append(new_dev)
+            self._write_json(self.devices_file, devices)
+            return new_dev
+
+    def update_device(self, device_id, update_data):
+        """Update configurable fields of a registered device (name, chip type, etc.)."""
+        with _LOCK:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            # Check duplicate MAC if updated
+            new_mac = str(update_data.get("mac_address", "")).strip().upper() if update_data.get("mac_address") else None
+            if new_mac and new_mac not in ["UNKNOWN", ""]:
+                for d in devices:
+                    if str(d.get("device_id", "")).strip().upper() != target:
+                        if str(d.get("mac_address", "")).strip().upper() == new_mac:
+                            raise ValueError(f"MAC address '{new_mac}' is already registered to device '{d.get('device_id')}'")
+
+            for i, d in enumerate(devices):
+                if str(d.get("device_id", "")).strip().upper() == target:
+                    for k in ["device_name", "device_type", "firmware_version", "mac_address"]:
+                        if k in update_data and update_data[k] is not None:
+                            d[k] = str(update_data[k]).strip()
+                    d["updated_at"] = now_iso
+                    devices[i] = d
+                    self._write_json(self.devices_file, devices)
+                    return d
+            return None
+
+    def auto_discover_device(self, device_id, mac=None, device_type=None, device_name=None, firmware_version=None, ip_address=None):
+        """
+        Auto-registers newly connected hardware tracker into devices.json
+        with auto_discovered=True, awaiting admin bus assignment.
+        """
+        with _LOCK:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            for d in devices:
+                if str(d.get("device_id", "")).strip().upper() == target or (
+                    mac and str(d.get("mac_address", "")).strip().upper() == str(mac).strip().upper()
+                ):
+                    return d
+
+            dev_type = str(device_type or "ESP8266").strip().upper()
+            dev_name = device_name or f"Auto-Discovered {dev_type} ({target})"
+            token = f"tok_{target.lower()}_{uuid.uuid4().hex[:10]}"
+
+            new_dev = {
+                "id": len(devices) + 1,
+                "device_id": target,
+                "device_name": dev_name,
+                "mac_address": str(mac).strip().upper() if mac else "UNKNOWN",
+                "device_type": dev_type,
+                "firmware_version": str(firmware_version or "1.0.0").strip(),
+                "device_token": token,
+                "assigned_bus_id": None,
+                "is_registered": True,
+                "auto_discovered": True,
+                "status": "online",
+                "last_seen": now_iso,
+                "ip_address": ip_address,
+                "created_at": now_iso,
+                "updated_at": now_iso
+            }
+
+            devices.append(new_dev)
+            self._write_json(self.devices_file, devices)
+            return new_dev
+
+    def assign_device_to_bus(self, device_id, bus_id):
+        """
+        Assign or reassign an ESP/hardware device to a bus, ensuring 1-to-1 mapping.
+        """
+        with _LOCK:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            matched = None
+
+            for d in devices:
+                if str(d.get("device_id", "")).strip().upper() == target:
+                    matched = d
+                    break
+
+            if not matched:
+                raise ValueError(f"Device '{device_id}' not found")
+
+            if bus_id:
+                target_bus_id = str(bus_id).strip().upper()
+                bus = self.get_bus(target_bus_id)
+                if not bus:
+                    raise ValueError(f"Bus '{bus_id}' not found")
+
+                # Clear assignment from any other device currently pointing to this bus
+                for d in devices:
+                    if d.get("device_id") != matched.get("device_id") and str(d.get("assigned_bus_id", "")).strip().upper() == target_bus_id:
+                        d["assigned_bus_id"] = None
+
+                matched["assigned_bus_id"] = target_bus_id
+                matched["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+                # Update the bus record
+                self.update_bus(target_bus_id, {"device_id": matched["device_id"]})
+            else:
+                # Unassign
+                matched["assigned_bus_id"] = None
+                matched["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+            self._write_json(self.devices_file, devices)
+            return matched
+
+    def delete_device(self, device_id):
+        """Delete an ESP device."""
+        with _LOCK:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            initial_count = len(devices)
+            filtered = [d for d in devices if str(d.get("device_id", "")).strip().upper() != target]
+
+            if len(filtered) == initial_count:
+                return False
+
+            self._write_json(self.devices_file, filtered)
+            return True
+
+    def touch_device_seen(self, device_id, mac=None, device_type=None, ip_address=None, gps_status="valid", assigned_bus_id=None, device_name=None, firmware_version=None, wifi_rssi=None, battery_mv=None, uptime_seconds=None):
+        """Record ping arrival timestamp, hardware identifiers, and telemetry diagnostics."""
+        with _LOCK:
+            target = str(device_id).strip().upper()
+            devices = self._read_json(self.devices_file, default=[])
+            now_iso = datetime.now(timezone.utc).isoformat()
+            matched = None
+
+            for d in devices:
+                if str(d.get("device_id", "")).strip().upper() == target or (
+                    mac and str(d.get("mac_address", "")).strip().upper() == str(mac).strip().upper()
+                ):
+                    matched = d
+                    break
+
+            if matched:
+                matched["last_seen"] = now_iso
+                matched["updated_at"] = now_iso
+                if ip_address:
+                    matched["ip_address"] = ip_address
+                if mac and (not matched.get("mac_address") or matched.get("mac_address") == "AA:BB:CC:00:00:00"):
+                    matched["mac_address"] = str(mac).strip().upper()
+                if device_type:
+                    matched["device_type"] = str(device_type).strip().upper()
+                if assigned_bus_id and not matched.get("assigned_bus_id"):
+                    matched["assigned_bus_id"] = str(assigned_bus_id).strip().upper()
+                if device_name and not matched.get("device_name"):
+                    matched["device_name"] = str(device_name).strip()
+                if firmware_version:
+                    matched["firmware_version"] = str(firmware_version).strip()
+                if wifi_rssi is not None:
+                    matched["wifi_rssi"] = int(wifi_rssi)
+                if battery_mv is not None:
+                    matched["battery_mv"] = int(battery_mv)
+                if uptime_seconds is not None:
+                    matched["uptime_seconds"] = int(uptime_seconds)
+            else:
+                dev_type = str(device_type or "ESP8266").strip().upper()
+                dev_name = device_name or f"Auto-Discovered {dev_type} ({target})"
+                token = f"tok_{target.lower()}_{uuid.uuid4().hex[:10]}"
+
+                matched = {
+                    "id": len(devices) + 1,
+                    "device_id": target,
+                    "device_name": dev_name,
+                    "mac_address": str(mac).strip().upper() if mac else "UNKNOWN",
+                    "device_type": dev_type,
+                    "firmware_version": str(firmware_version or "1.0.0").strip(),
+                    "device_token": token,
+                    "assigned_bus_id": str(assigned_bus_id).strip().upper() if assigned_bus_id else None,
+                    "is_registered": False,
+                    "auto_discovered": True,
+                    "status": "online",
+                    "last_seen": now_iso,
+                    "ip_address": ip_address,
+                    "wifi_rssi": int(wifi_rssi) if wifi_rssi is not None else None,
+                    "battery_mv": int(battery_mv) if battery_mv is not None else None,
+                    "uptime_seconds": int(uptime_seconds) if uptime_seconds is not None else None,
+                    "created_at": now_iso,
+                    "updated_at": now_iso
+                }
+                devices.append(matched)
+
+            self._write_json(self.devices_file, devices)
+            return matched
 
     # -------------------------------------------------------------------------
     # CURRENT LOCATIONS
@@ -1144,6 +1651,7 @@ class JsonDB:
         with _LOCK:
             _ACTIVE_TRIPS.clear()
             self._write_json(self.buses_file, [])
+            self._write_json(self.devices_file, [])
             self._write_json(self.locations_file, {})
             self._write_json(self.history_file, [])
             self._write_json(self.deviations_file, [])
