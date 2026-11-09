@@ -1,0 +1,108 @@
+[
+  {
+    "id": "ROUTE-01",
+    "route_name": "Route 01: Koti - Abids - Punjagutta - Campus",
+    "route_code": "R01",
+    "origin": "Koti Central Bus Station",
+    "destination": "Main Campus Terminal",
+    "description": "Primary college arterial route through central and western Hyderabad corridors.",
+    "waypoints": [
+      [
+        17.385044,
+        78.486671
+      ],
+      [
+        17.3912,
+        78.4745
+      ],
+      [
+        17.4021,
+        78.461
+      ],
+      [
+        17.4255,
+        78.4512
+      ],
+      [
+        17.442,
+        78.448
+      ],
+      [
+        17.458,
+        78.441
+      ]
+    ],
+    "assigned_stops": [
+      "STOP-01",
+      "STOP-02",
+      "STOP-03",
+      "STOP-04",
+      "STOP-05"
+    ]
+  },
+  {
+    "id": "ROUTE-02",
+    "route_name": "Route 02: Secunderabad - Paradise - Begumpet",
+    "route_code": "R02",
+    "origin": "Secunderabad Railway Station",
+    "destination": "Begumpet Tech Park & Campus",
+    "description": "Northern corridor connecting railway junction to transit stops.",
+    "waypoints": [
+      [
+        17.43993,
+        78.498274
+      ],
+      [
+        17.4435,
+        78.487
+      ],
+      [
+        17.4411,
+        78.4712
+      ],
+      [
+        17.438,
+        78.459
+      ],
+      [
+        17.435,
+        78.446
+      ]
+    ],
+    "assigned_stops": [
+      "STOP-06",
+      "STOP-07",
+      "STOP-08"
+    ]
+  },
+  {
+    "id": "ROUTE-03",
+    "route_name": "Route 03: LB Nagar - Dilsukhnagar - Malakpet",
+    "route_code": "R03",
+    "origin": "LB Nagar Metro Station",
+    "destination": "Malakpet Terminal & Campus",
+    "description": "Eastern metro transit feeder route.",
+    "waypoints": [
+      [
+        17.345719,
+        78.55223
+      ],
+      [
+        17.3688,
+        78.5245
+      ],
+      [
+        17.3755,
+        78.498
+      ],
+      [
+        17.382,
+        78.482
+      ]
+    ],
+    "assigned_stops": [
+      "STOP-09",
+      "STOP-10"
+    ]
+  }
+]

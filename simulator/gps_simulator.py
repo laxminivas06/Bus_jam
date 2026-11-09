@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import sys
@@ -12,9 +13,9 @@ load_dotenv(BASE_DIR / ".env")
 
 API_URL = os.getenv("SERVER_URL", "http://127.0.0.1:5001/api/locations/save")
 API_KEY = os.getenv("API_KEY", "YOUR_API_KEY")
-UPDATE_INTERVAL = int(os.getenv("SIMULATOR_INTERVAL", "10"))
+UPDATE_INTERVAL = int(os.getenv("SIMULATOR_INTERVAL", "5"))
 
-# Predefined Hyderabad Route Waypoints for 25 Buses
+# Predefined Hyderabad Route Waypoints
 ROUTES = [
     # Route 1: Koti -> Abids -> Punjagutta -> Campus
     [
@@ -43,20 +44,6 @@ ROUTES = [
     ],
 ]
 
-def generate_bus_waypoints():
-    """Assign waypoints for 25 buses based on base route templates."""
-    bus_waypoints = {}
-    for i in range(1, 26):
-        bus_id = f"BUS{i:03d}"
-        route_template = ROUTES[(i - 1) % len(ROUTES)]
-        # Add slight variation per bus so they don't overlap exactly
-        offset_lat = ((i * 7) % 15 - 7) * 0.0012
-        offset_lng = ((i * 11) % 15 - 7) * 0.0012
-        
-        bus_route = [(lat + offset_lat, lng + offset_lng) for lat, lng in route_template]
-        bus_waypoints[bus_id] = bus_route
-    return bus_waypoints
-
 
 def calculate_heading_and_distance(lat1, lon1, lat2, lon2):
     """Calculate heading angle (0-360 deg) and approximate distance (km) between two points."""
@@ -68,100 +55,162 @@ def calculate_heading_and_distance(lat1, lon1, lat2, lon2):
     x = math.cos(lat1_r) * math.sin(lat2_r) - math.sin(lat1_r) * math.cos(lat2_r) * math.cos(d_lon)
 
     heading = (math.degrees(math.atan2(y, x)) + 360) % 360
-    
+
     # Haversine distance
     d_lat = lat2_r - lat1_r
     a = math.sin(d_lat / 2)**2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(d_lon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    c = 2 * math.atan2(math.sqrt(max(0.0, min(1.0, a))), math.sqrt(max(0.0, min(1.0, 1.0 - a))))
     distance_km = 6371 * c
 
     return heading, distance_km
 
 
 class BusSimulatorInstance:
-    def __init__(self, bus_id, waypoints):
+    def __init__(self, bus_id, waypoints, should_deviate=False):
         self.bus_id = bus_id
         self.waypoints = waypoints
         self.segment_index = 0
         self.progress = 0.0  # 0.0 to 1.0 along current segment
         self.forward = True
-        self.step_size = 0.15  # Interpolation step
+        self.step_size = 0.12  # Interpolation step
+        self.should_deviate = should_deviate
+        self.cycle_count = 0
+        self.stopped_cycles = 0
 
     def get_next_location(self):
+        self.cycle_count += 1
         w1 = self.waypoints[self.segment_index]
         if self.forward:
-            next_idx = (self.segment_index + 1)
+            next_idx = self.segment_index + 1
             if next_idx >= len(self.waypoints):
                 self.forward = False
                 next_idx = len(self.waypoints) - 2
         else:
-            next_idx = (self.segment_index - 1)
+            next_idx = self.segment_index - 1
             if next_idx < 0:
                 self.forward = True
                 next_idx = 1
 
         w2 = self.waypoints[next_idx]
 
-        # Calculate current interpolated coordinates
-        curr_lat = w1[0] + (w2[0] - w1[0]) * self.progress
-        curr_lng = w1[1] + (w2[1] - w1[1]) * self.progress
+        # Simulate stop dwell time at waypoints
+        if self.stopped_cycles > 0:
+            self.stopped_cycles -= 1
+            curr_lat = w1[0]
+            curr_lng = w1[1]
+            speed = 0.0
+            heading, _ = calculate_heading_and_distance(w1[0], w1[1], w2[0], w2[1])
+            status = "STOPPED"
+        else:
+            # Interpolate coordinates
+            curr_lat = w1[0] + (w2[0] - w1[0]) * self.progress
+            curr_lng = w1[1] + (w2[1] - w1[1]) * self.progress
 
-        heading, _ = calculate_heading_and_distance(w1[0], w1[1], w2[0], w2[1])
+            # If simulated deviation flag is on, add deliberate off-route offset
+            if self.should_deviate and 4 <= self.cycle_count <= 14:
+                curr_lat += 0.0080  # ~900m off-route detour
+                curr_lng += 0.0060
 
-        self.progress += self.step_size
-        if self.progress >= 1.0:
-            self.progress = 0.0
-            self.segment_index = next_idx
+            heading, _ = calculate_heading_and_distance(w1[0], w1[1], w2[0], w2[1])
+            speed = 32.0 + (self.cycle_count % 5) * 2.5
+            status = "MOVING"
+
+            self.progress += self.step_size
+            if self.progress >= 1.0:
+                self.progress = 0.0
+                self.segment_index = next_idx
+                # Dwell at stop for 1 cycle
+                self.stopped_cycles = 1
 
         return {
             "deviceId": self.bus_id,
             "latitude": round(curr_lat, 6),
             "longitude": round(curr_lng, 6),
-            "apikey": API_KEY
+            "apiKey": API_KEY,
+            "speed": round(speed, 1),
+            "heading": round(heading, 1),
+            "accuracy": 1.2,
+            "satellites": 9,
+            "altitude": 540.0,
+            "status": status
         }
 
 
-def run_simulator():
+def generate_bus_waypoints(count=25):
+    """Assign waypoints for N buses based on route templates."""
+    bus_waypoints = {}
+    for i in range(1, count + 1):
+        # First bus can be named 'bus-01' to match ESP8266 hardware, rest BUS002..
+        bus_id = "bus-01" if i == 1 else f"BUS{i:03d}"
+        route_template = ROUTES[(i - 1) % len(ROUTES)]
+        # Add slight variation per bus so they don't overlap exactly
+        offset_lat = ((i * 7) % 15 - 7) * 0.0012
+        offset_lng = ((i * 11) % 15 - 7) * 0.0012
+
+        bus_route = [(lat + offset_lat, lng + offset_lng) for lat, lng in route_template]
+        bus_waypoints[bus_id] = bus_route
+    return bus_waypoints
+
+
+def run_simulator(bus_count=25, interval=5, single_bus_id=None, test_deviation=True):
     """
     Main simulator execution loop.
-    Emulates the SIMCom A7600C/A7670C AT+HTTP GET communication:
-    GET /api/locations/save?deviceId=BUS001&latitude=17.281409&longitude=78.553712&apikey=YOUR_API_KEY
+    Emulates physical GNSS tracker transmissions (ESP8266 & SIMCom A7670C) via HTTP GET query parameters.
     """
-    print("=" * 70)
-    print("  HARDWARE-INDEPENDENT COLLEGE BUS GPS SIMULATOR (25 BUSES)")
-    print(f"  Target Endpoint: {API_URL}")
-    print(f"  Update Frequency: Every {UPDATE_INTERVAL} seconds")
-    print(f"  A7600C / AT-Command Emulation Mode (GET query parameters)")
-    print("=" * 70)
+    print("=" * 75)
+    print("  SMART BUS LIVE GPS SIMULATOR & ROUTE INTELLIGENCE TEST HARNESS")
+    print(f"  Target Endpoint  : {API_URL}")
+    print(f"  Update Frequency : Every {interval} seconds")
+    print(f"  Simulated Buses  : {1 if single_bus_id else bus_count}")
+    print(f"  Route Deviation  : Enabled on BUS005" if test_deviation else "  Route Deviation  : Disabled")
+    print("=" * 75)
 
-    bus_routes = generate_bus_waypoints()
-    simulators = [BusSimulatorInstance(bus_id, waypoints) for bus_id, waypoints in bus_routes.items()]
+    if single_bus_id:
+        simulators = [BusSimulatorInstance(single_bus_id, ROUTES[0], should_deviate=test_deviation)]
+    else:
+        bus_routes = generate_bus_waypoints(bus_count)
+        simulators = [
+            BusSimulatorInstance(bus_id, waypoints, should_deviate=(bus_id == "BUS005" and test_deviation))
+            for bus_id, waypoints in bus_routes.items()
+        ]
 
     cycle = 1
     while True:
-        print(f"\n[Cycle #{cycle}] Transmitting GPS updates for 25 buses...")
+        print(f"\n[Cycle #{cycle} - {time.strftime('%H:%M:%S')}] Transmitting GPS updates...")
         success_count = 0
 
         for sim in simulators:
             params = sim.get_next_location()
             try:
-                # Send HTTP GET request with query params matching A7600C AT-command syntax
                 response = requests.get(API_URL, params=params, timeout=5)
                 if response.status_code == 200:
                     success_count += 1
                 else:
-                    print(f"  [ERROR] {params['deviceId']} failed with HTTP {response.status_code}: {response.text}")
+                    print(f"  [ERROR] {params['deviceId']} returned {response.status_code}: {response.text}")
             except Exception as e:
                 print(f"  [EXCEPT] {params['deviceId']} request failed: {e}")
 
-        print(f"[{time.strftime('%H:%M:%S')}] Cycle #{cycle} completed: {success_count}/25 buses updated successfully.")
+        print(f"  [DONE] {success_count}/{len(simulators)} buses updated successfully.")
         cycle += 1
-        time.sleep(UPDATE_INTERVAL)
+        time.sleep(interval)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Smart Bus GPS Simulator")
+    parser.add_argument("--count", type=int, default=25, help="Number of buses to simulate (default: 25)")
+    parser.add_argument("--interval", type=int, default=5, help="Update interval in seconds (default: 5)")
+    parser.add_argument("--bus-id", type=str, default=None, help="Simulate a single specific bus (e.g. bus-01)")
+    parser.add_argument("--no-deviation", action="store_true", help="Disable simulated route deviation")
+
+    args = parser.parse_args()
+
     try:
-        run_simulator()
+        run_simulator(
+            bus_count=args.count,
+            interval=args.interval,
+            single_bus_id=args.bus_id,
+            test_deviation=not args.no_deviation
+        )
     except KeyboardInterrupt:
-        print("\nSimulator stopped by user.")
+        print("\n[INFO] Simulator terminated by user.")
         sys.exit(0)

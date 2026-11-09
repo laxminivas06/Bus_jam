@@ -1,1 +1,62 @@
-[]
+[
+  {
+    "id": 1,
+    "bus_id": "BUS-01",
+    "bus_name": "Campus Express 01",
+    "bus_number": "TS 09 UB 1001",
+    "device_id": "ESP8266-BUS-01",
+    "route_name": "Route 01: Koti Central - Sphoorthy Campus",
+    "route_id": "ROUTE-01",
+    "driver_name": "Ramesh Kumar",
+    "driver_phone": "+91 98480 11001",
+    "capacity": 52,
+    "is_active": true,
+    "created_at": "2026-11-09T10:04:59.996003+00:00",
+    "updated_at": "2026-11-09T10:04:59.996003+00:00"
+  },
+  {
+    "id": 2,
+    "bus_id": "BUS-02",
+    "bus_name": "Campus Express 02",
+    "bus_number": "TS 09 UB 1002",
+    "device_id": "ESP8266-BUS-02",
+    "route_name": "Route 02: Secunderabad - Sphoorthy Campus",
+    "route_id": "ROUTE-02",
+    "driver_name": "Suresh Reddy",
+    "driver_phone": "+91 98480 11002",
+    "capacity": 50,
+    "is_active": true,
+    "created_at": "2026-11-09T10:05:00.007751+00:00",
+    "updated_at": "2026-11-09T10:05:00.007751+00:00"
+  },
+  {
+    "id": 3,
+    "bus_id": "BUS-03",
+    "bus_name": "Campus Metro Shuttle",
+    "bus_number": "TS 09 UB 1003",
+    "device_id": "ESP8266-BUS-03",
+    "route_name": "Route 03: LB Nagar - Sphoorthy Campus",
+    "route_id": "ROUTE-03",
+    "driver_name": "Mohammed Ali",
+    "driver_phone": "+91 98480 11003",
+    "capacity": 45,
+    "is_active": true,
+    "created_at": "2026-11-09T10:05:00.020436+00:00",
+    "updated_at": "2026-11-09T10:05:00.020436+00:00"
+  },
+  {
+    "id": 4,
+    "bus_id": "BUS-04",
+    "bus_name": "Campus City Liner",
+    "bus_number": "TS 09 UB 1004",
+    "device_id": "ESP8266-BUS-04",
+    "route_name": "Route 01: Koti Central - Sphoorthy Campus",
+    "route_id": "ROUTE-01",
+    "driver_name": "Venkatesh Rao",
+    "driver_phone": "+91 98480 11004",
+    "capacity": 55,
+    "is_active": true,
+    "created_at": "2026-11-09T10:05:00.033976+00:00",
+    "updated_at": "2026-11-09T10:05:00.033976+00:00"
+  }
+]

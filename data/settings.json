@@ -1,3 +1,8 @@
 {
-  "online_threshold_seconds": 30
+  "online_threshold_seconds": 30,
+  "deviation_threshold_meters": 200,
+  "geofence_radius_meters": 100,
+  "auto_refresh_seconds": 5,
+  "server_url": "https://trackbus.pythonanywhere.com",
+  "api_key": "YOUR_API_KEY"
 }

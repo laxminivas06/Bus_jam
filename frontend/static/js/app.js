@@ -1,139 +1,116 @@
 /**
- * CampusFleet - College Bus Live Tracking System
- * Frontend Application JavaScript (Vanilla ES6 + Leaflet.js)
+ * CampusFleet - Sphoorthy Campus Lead Live Bus Tracking System
+ * Frontend Application JavaScript (Simplified, Lightweight, Real-Time)
  */
 
 document.addEventListener("DOMContentLoaded", () => {
-    // State Management
+    // ==========================================
+    // 1. STATE MANAGEMENT
+    // ==========================================
     const state = {
         buses: [],
-        routes: [],
         selectedBusId: null,
-        busMarkers: {}, // Reusable Leaflet markers map: { bus_id: L.marker }
-        historyPolyline: null,
-        historyMarkers: [],
-        activeFilters: {
-            search: "",
-            route: "all",
-            status: "all"
-        },
-        metrics: {
-            total: 0,
-            online: 0,
-            offline: 0
-        },
-        autoRefreshInterval: 10, // seconds
-        countdownRemaining: 10,
+        busMarkers: {},        // Map of { bus_id: L.marker }
+        routePolyline: null,   // Active route L.polyline
+        activeFilter: "all",   // "all" | "connected" | "offline"
+        searchQuery: "",
+        autoRefreshInterval: 5, // 5 seconds
+        countdownRemaining: 5,
         timerId: null,
-        isAdmin: false
+        mobileActiveTab: "buses" // "buses" | "map"
     };
 
-    // DOM Elements
+    // ==========================================
+    // 2. DOM ELEMENTS CACHE
+    // ==========================================
     const elements = {
-        map: null, // Leaflet map instance
-        sidebar: document.getElementById("sidebar"),
-        openSidebarBtn: document.getElementById("openSidebarBtn"),
-        closeSidebarBtn: document.getElementById("closeSidebarBtn"),
-        
-        statTotalCount: document.getElementById("statTotalCount"),
-        statOnlineCount: document.getElementById("statOnlineCount"),
-        statOfflineCount: document.getElementById("statOfflineCount"),
-        mobileOnlineCount: document.getElementById("mobileOnlineCount"),
-        
-        filterStatTotal: document.getElementById("filterStatTotal"),
-        filterStatOnline: document.getElementById("filterStatOnline"),
-        filterStatOffline: document.getElementById("filterStatOffline"),
-        
+        map: null,
+        // Header
+        headerActiveBusCount: document.getElementById("headerActiveBusCount"),
+        syncStatusLabel: document.getElementById("syncStatusLabel"),
+        openRegisterModalBtn: document.getElementById("openRegisterModalBtn"),
+
+        // Bus Selector Panel
+        busSelectorPanel: document.getElementById("busSelectorPanel"),
+        liveMapPanel: document.getElementById("liveMapPanel"),
         busSearchInput: document.getElementById("busSearchInput"),
         clearSearchBtn: document.getElementById("clearSearchBtn"),
-        routeFilterSelect: document.getElementById("routeFilterSelect"),
-        statusFilterSelect: document.getElementById("statusFilterSelect"),
-        
-        busCardsList: document.getElementById("busCardsList"),
-        filteredCountBadge: document.getElementById("filteredCountBadge"),
-        
-        busDetailDrawer: document.getElementById("busDetailDrawer"),
-        closeDrawerBtn: document.getElementById("closeDrawerBtn"),
-        detailBusId: document.getElementById("detailBusId"),
-        detailBusNumber: document.getElementById("detailBusNumber"),
-        detailStatusIndicator: document.getElementById("detailStatusIndicator"),
-        detailStatusText: document.getElementById("detailStatusText"),
-        detailRouteName: document.getElementById("detailRouteName"),
-        detailSpeed: document.getElementById("detailSpeed"),
-        detailHeading: document.getElementById("detailHeading"),
-        detailCoordinates: document.getElementById("detailCoordinates"),
-        detailDriverName: document.getElementById("detailDriverName"),
-        detailDriverPhone: document.getElementById("detailDriverPhone"),
-        detailLastUpdated: document.getElementById("detailLastUpdated"),
-        drawerHistoryDateSelect: document.getElementById("drawerHistoryDateSelect"),
-        centerMapBtn: document.getElementById("centerMapBtn"),
-        toggleHistoryBtn: document.getElementById("toggleHistoryBtn"),
-        
-        nextRefreshCountdown: document.getElementById("nextRefreshCountdown"),
-        manualRefreshIcon: document.getElementById("manualRefreshIcon"),
-        mapFitBoundsBtn: document.getElementById("mapFitBoundsBtn"),
-        
-        openAdminBtn: document.getElementById("openAdminBtn"),
-        adminModal: document.getElementById("adminModal"),
-        closeAdminModalBtn: document.getElementById("closeAdminModalBtn"),
-        adminLoginForm: document.getElementById("adminLoginForm"),
-        adminLoginView: document.getElementById("adminLoginView"),
-        adminDashboardView: document.getElementById("adminDashboardView"),
-        adminUsernameInput: document.getElementById("adminUsernameInput"),
-        adminPasswordInput: document.getElementById("adminPasswordInput"),
-        adminLoginError: document.getElementById("adminLoginError"),
-        adminLogoutBtn: document.getElementById("adminLogoutBtn"),
-        
-        tabHistoryAuditBtn: document.getElementById("tabHistoryAuditBtn"),
-        tabAddBusBtn: document.getElementById("tabAddBusBtn"),
-        adminHistorySection: document.getElementById("adminHistorySection"),
-        adminAddBusSection: document.getElementById("adminAddBusSection"),
-        adminHistoryBusSelect: document.getElementById("adminHistoryBusSelect"),
-        adminHistoryDateInput: document.getElementById("adminHistoryDateInput"),
-        adminViewLocationsBtn: document.getElementById("adminViewLocationsBtn"),
-        adminHistoryResults: document.getElementById("adminHistoryResults"),
-        adminHistoryCountBadge: document.getElementById("adminHistoryCountBadge"),
-        adminHistoryTableBody: document.getElementById("adminHistoryTableBody"),
-        adminShowOnMapBtn: document.getElementById("adminShowOnMapBtn"),
+        statusTabBtns: document.querySelectorAll(".status-tab-btn"),
+        busesListContainer: document.getElementById("busesListContainer"),
+        countAllBuses: document.getElementById("countAllBuses"),
+        countConnectedBuses: document.getElementById("countConnectedBuses"),
+        countOfflineBuses: document.getElementById("countOfflineBuses"),
+        footerTotalCount: document.getElementById("footerTotalCount"),
+        mobileBusCount: document.getElementById("mobileBusCount"),
 
-        addBusForm: document.getElementById("addBusForm"),
-        adminFormMsg: document.getElementById("adminFormMsg")
+        // Mobile Tabs
+        mobileTabBusesBtn: document.getElementById("mobileTabBusesBtn"),
+        mobileTabMapBtn: document.getElementById("mobileTabMapBtn"),
+
+        // Floating Telemetry HUD
+        hudBusName: document.getElementById("hudBusName"),
+        hudBusNumber: document.getElementById("hudBusNumber"),
+        hudConnectionBadge: document.getElementById("hudConnectionBadge"),
+        hudCoordsVal: document.getElementById("hudCoordsVal"),
+        hudCopyCoordsBtn: document.getElementById("hudCopyCoordsBtn"),
+        hudGoogleMapsLink: document.getElementById("hudGoogleMapsLink"),
+        hudSpeedVal: document.getElementById("hudSpeedVal"),
+        hudHeadingVal: document.getElementById("hudHeadingVal"),
+        hudSatsVal: document.getElementById("hudSatsVal"),
+        hudUpdatedVal: document.getElementById("hudUpdatedVal"),
+        hudRouteVal: document.getElementById("hudRouteVal"),
+
+        // Map Controls
+        centerSelectedBusBtn: document.getElementById("centerSelectedBusBtn"),
+        fitAllBusesBtn: document.getElementById("fitAllBusesBtn"),
+
+        // Modal
+        registerBusModal: document.getElementById("registerBusModal"),
+        closeRegisterModalBtn: document.getElementById("closeRegisterModalBtn"),
+        simpleAddBusForm: document.getElementById("simpleAddBusForm"),
+
+        // Toast Container
+        toastContainer: document.getElementById("toastContainer")
     };
 
     // ==========================================
-    // 1. MAP INITIALIZATION (Leaflet.js + OpenStreetMap)
+    // 3. MAP INITIALIZATION
     // ==========================================
     function initMap() {
-        // Default center: [17.385044, 78.486671] (Hyderabad)
-        const defaultCenter = [17.385044, 78.486671];
-        
+        const defaultCenter = [17.385044, 78.486671]; // Hyderabad Coordinates
+
         elements.map = L.map("map", {
             center: defaultCenter,
-            zoom: 12,
+            zoom: 13,
             zoomControl: false
         });
 
-        // Add Zoom Control to bottom right
         L.control.zoom({ position: "bottomright" }).addTo(elements.map);
 
-        // OpenStreetMap Tile Layer
+        // Standard clean OpenStreetMap light tiles
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(elements.map);
     }
 
-    // Custom Bus Marker HTML Generator
+    // Directional Marker Pin Generator
     function createBusMarkerIcon(bus, isSelected = false) {
         const isOnline = bus.is_online;
-        const statusClass = isOnline ? "online" : "offline";
+        const isMoving = bus.is_moving;
+
+        let statusClass = "offline";
+        if (isOnline) {
+            statusClass = isMoving ? "online" : "stopped";
+        }
+
         const selectedClass = isSelected ? "selected" : "";
-        const heading = bus.current_location ? bus.current_location.heading || 0 : 0;
+        const heading = bus.current_location ? (bus.current_location.heading || 0) : 0;
 
         const html = `
             <div class="bus-marker-container">
-                <div class="bus-marker-pin ${statusClass} ${selectedClass}" style="transform: rotate(${heading}deg);">
-                    <i class="fa-solid fa-bus"></i>
+                <div class="bus-marker-pin ${statusClass} ${selectedClass}" style="transform: rotate(${heading}deg);" title="${bus.bus_name} (${bus.bus_number})">
+                    <i class="fa-solid fa-arrow-up"></i>
                 </div>
             </div>
         `;
@@ -141,376 +118,403 @@ document.addEventListener("DOMContentLoaded", () => {
         return L.divIcon({
             html: html,
             className: "custom-bus-marker-wrapper",
-            iconSize: [40, 40],
-            iconAnchor: [20, 20],
-            popupAnchor: [0, -20]
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            popupAnchor: [0, -18]
         });
     }
 
     // ==========================================
-    // 2. API DATA FETCH & MARKER REUSE
+    // 4. DATA FETCHING (AUTOMATIC GPS SYNC)
     // ==========================================
     async function fetchBuses() {
         try {
-            elements.manualRefreshIcon.classList.add("active");
-            
-            const queryParams = new URLSearchParams();
-            if (state.activeFilters.search) queryParams.append("search", state.activeFilters.search);
-            if (state.activeFilters.route !== "all") queryParams.append("route", state.activeFilters.route);
-            if (state.activeFilters.status !== "all") queryParams.append("status", state.activeFilters.status);
+            const res = await fetch("/api/buses?campus=Sphoorthy Campus Lead");
+            if (!res.ok) throw new Error("Failed to load campus fleet");
 
-            const response = await fetch(`/api/buses?${queryParams.toString()}`);
-            if (!response.ok) throw new Error("Failed to fetch bus locations");
-
-            const data = await response.json();
-            
+            const data = await res.json();
             state.buses = data.buses || [];
-            state.metrics = data.metrics || { total_buses: 0, online_buses: 0, offline_buses: 0 };
-            state.routes = data.routes || [];
 
-            // Update UI components
-            updateMetricsUI();
-            updateRoutesDropdown();
-            renderBusCardsList();
+            updateCounts();
+            renderBusesList();
             updateMapMarkers();
 
-            // If a bus is selected, update its detail drawer info
+            // If a bus is selected, update its HUD telemetry and ensure its route is shown
             if (state.selectedBusId) {
-                const currentSelected = state.buses.find(b => b.bus_id === state.selectedBusId);
-                if (currentSelected) {
-                    populateDetailDrawer(currentSelected);
+                const current = state.buses.find(b => b.bus_id === state.selectedBusId);
+                if (current) {
+                    updateTelemetryHUD(current);
                 }
+            } else if (state.buses.length > 0) {
+                // Auto-select first active bus on initial load
+                const firstOnline = state.buses.find(b => b.is_online) || state.buses[0];
+                selectBus(firstOnline.bus_id, false);
             }
-
-        } catch (error) {
-            console.error("Error fetching bus locations:", error);
-        } finally {
-            setTimeout(() => {
-                elements.manualRefreshIcon.classList.remove("active");
-            }, 600);
+        } catch (err) {
+            console.error("Error fetching Sphoorthy Campus buses:", err);
         }
     }
 
-    // Efficient Marker Reuse Logic
+    function updateCounts() {
+        const total = state.buses.length;
+        const connected = state.buses.filter(b => b.is_online).length;
+        const offline = total - connected;
+
+        if (elements.headerActiveBusCount) elements.headerActiveBusCount.textContent = connected;
+        if (elements.countAllBuses) elements.countAllBuses.textContent = total;
+        if (elements.countConnectedBuses) elements.countConnectedBuses.textContent = connected;
+        if (elements.countOfflineBuses) elements.countOfflineBuses.textContent = offline;
+        if (elements.footerTotalCount) elements.footerTotalCount.textContent = total;
+        if (elements.mobileBusCount) elements.mobileBusCount.textContent = total;
+    }
+
+    // ==========================================
+    // 5. BUS SELECTION & LIST RENDERING
+    // ==========================================
+    function renderBusesList() {
+        const query = state.searchQuery.toLowerCase();
+        let filtered = state.buses;
+
+        // Apply status filter
+        if (state.activeFilter === "connected") {
+            filtered = filtered.filter(b => b.is_online);
+        } else if (state.activeFilter === "offline") {
+            filtered = filtered.filter(b => !b.is_online);
+        }
+
+        // Apply search query
+        if (query) {
+            filtered = filtered.filter(b =>
+                (b.bus_name || "").toLowerCase().includes(query) ||
+                (b.bus_number || "").toLowerCase().includes(query) ||
+                (b.bus_id || "").toLowerCase().includes(query) ||
+                (b.route_name || "").toLowerCase().includes(query)
+            );
+        }
+
+        elements.busesListContainer.innerHTML = "";
+
+        if (filtered.length === 0) {
+            elements.busesListContainer.innerHTML = `
+                <div style="text-align:center;padding:24px 12px;color:var(--text-muted);font-size:13px;">
+                    <i class="fa-solid fa-bus" style="font-size:24px;margin-bottom:8px;color:var(--text-dim);"></i>
+                    <p>No buses found matching criteria.</p>
+                </div>
+            `;
+            return;
+        }
+
+        filtered.forEach(bus => {
+            const isSelected = (bus.bus_id === state.selectedBusId);
+            const isOnline = bus.is_online;
+            const statusClass = bus.connection_status || (isOnline ? "connected" : "offline");
+            const statusLabel = bus.connection_label || (isOnline ? "Connected" : "Offline");
+
+            const sats = bus.current_location ? (bus.current_location.satellites || 8) : 0;
+            const hasGps = isOnline && !bus.has_gps_issue && sats > 3;
+            const gpsLabel = hasGps ? `GPS Active (${sats} Sats)` : (isOnline ? "Searching GPS Fix" : "Offline");
+            const speed = bus.current_location ? `${Math.round(bus.current_location.speed)} km/h` : "Stopped";
+
+            const card = document.createElement("div");
+            card.className = `bus-item-card ${isSelected ? 'active' : ''}`;
+            card.dataset.busId = bus.bus_id;
+
+            card.innerHTML = `
+                <div class="bus-card-head">
+                    <div class="bus-name-block">
+                        <span class="bus-name-title">${bus.bus_name || bus.bus_id}</span>
+                        <span class="bus-number-badge">${bus.bus_number}</span>
+                    </div>
+                    <span class="card-status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+
+                <div class="bus-card-middle">
+                    <i class="fa-solid fa-route" style="color:var(--primary);font-size:11px;"></i>
+                    <span>${bus.route_name || 'Assigned Campus Route'}</span>
+                </div>
+
+                <div class="bus-card-meta">
+                    <span class="gps-avail-tag ${hasGps ? 'available' : 'unavailable'}">
+                        <i class="fa-solid ${hasGps ? 'fa-satellite' : 'fa-satellite-dish'}"></i>
+                        <span>${gpsLabel}</span>
+                    </span>
+                    <span class="bus-speed-tag"><i class="fa-solid fa-gauge-high"></i> ${speed}</span>
+                </div>
+            `;
+
+            card.addEventListener("click", () => {
+                selectBus(bus.bus_id, true);
+            });
+
+            elements.busesListContainer.appendChild(card);
+        });
+    }
+
+    function selectBus(busId, userInitiated = true) {
+        state.selectedBusId = busId;
+        const bus = state.buses.find(b => b.bus_id === busId);
+        if (!bus) return;
+
+        // Highlight card in list
+        document.querySelectorAll(".bus-item-card").forEach(c => {
+            c.classList.toggle("active", c.dataset.busId === busId);
+        });
+
+        // Update Live Telemetry HUD
+        updateTelemetryHUD(bus);
+
+        // Update Map Markers and Pan/Zoom
+        updateMapMarkers();
+
+        if (bus.current_location) {
+            elements.map.flyTo([bus.current_location.latitude, bus.current_location.longitude], 15, {
+                duration: 1.0
+            });
+            if (state.busMarkers[busId]) {
+                state.busMarkers[busId].openPopup();
+            }
+        }
+
+        // Draw Route Polyline
+        loadAndDisplayRoutePath(bus);
+
+        // On mobile: switch to Map view automatically if clicked by user
+        if (userInitiated && window.innerWidth <= 900) {
+            switchMobileTab("map");
+        }
+    }
+
+    function updateTelemetryHUD(bus) {
+        elements.hudBusName.textContent = bus.bus_name || bus.bus_id;
+        elements.hudBusNumber.textContent = bus.bus_number || bus.bus_id;
+
+        const isOnline = bus.is_online;
+        const statusClass = bus.connection_status || (isOnline ? "connected" : "offline");
+        const statusLabel = bus.connection_label || (isOnline ? "Connected" : "Offline");
+
+        elements.hudConnectionBadge.className = `card-status-badge ${statusClass}`;
+        elements.hudConnectionBadge.textContent = statusLabel;
+
+        if (bus.current_location) {
+            const lat = bus.current_location.latitude.toFixed(6);
+            const lng = bus.current_location.longitude.toFixed(6);
+            elements.hudCoordsVal.textContent = `${lat}, ${lng}`;
+            elements.hudSpeedVal.textContent = `${Math.round(bus.current_location.speed)} km/h`;
+            elements.hudHeadingVal.textContent = `${Math.round(bus.current_location.heading)}° (${bus.current_location.cardinal_direction || 'N'})`;
+            elements.hudSatsVal.textContent = `${bus.current_location.satellites || 8} Sats`;
+            elements.hudUpdatedVal.textContent = formatTimeAgo(bus.current_location.updated_at);
+            elements.hudGoogleMapsLink.href = `https://www.google.com/maps?q=${lat},${lng}`;
+        } else {
+            elements.hudCoordsVal.textContent = "Waiting for GPS fix...";
+            elements.hudSpeedVal.textContent = "0 km/h";
+            elements.hudHeadingVal.textContent = "0° (N)";
+            elements.hudSatsVal.textContent = "0 Sats";
+            elements.hudUpdatedVal.textContent = "Never";
+            elements.hudGoogleMapsLink.href = "#";
+        }
+
+        elements.hudRouteVal.textContent = bus.route_name || "Campus Transit Route";
+    }
+
     function updateMapMarkers() {
-        const currentBusIdsInView = new Set();
+        const currentIds = new Set();
 
         state.buses.forEach(bus => {
             if (!bus.current_location) return;
 
-            const busId = bus.bus_id;
+            const bId = bus.bus_id;
             const lat = bus.current_location.latitude;
             const lng = bus.current_location.longitude;
-            const isSelected = (busId === state.selectedBusId);
-            
-            currentBusIdsInView.add(busId);
+            const isSelected = (bId === state.selectedBusId);
 
-            // Re-use existing marker if present
-            if (state.busMarkers[busId]) {
-                const marker = state.busMarkers[busId];
+            currentIds.add(bId);
+
+            if (state.busMarkers[bId]) {
+                const marker = state.busMarkers[bId];
                 marker.setLatLng([lat, lng]);
                 marker.setIcon(createBusMarkerIcon(bus, isSelected));
-                marker.getPopup().setContent(generatePopupHTML(bus));
+                marker.getPopup().setContent(`<strong>${bus.bus_name}</strong><br>${bus.bus_number}<br>Speed: ${Math.round(bus.current_location.speed)} km/h`);
             } else {
-                // Create new marker if it doesn't exist
                 const marker = L.marker([lat, lng], {
                     icon: createBusMarkerIcon(bus, isSelected)
                 });
-
-                marker.bindPopup(generatePopupHTML(bus));
-                marker.on("click", () => {
-                    selectBus(busId);
-                });
-
+                marker.bindPopup(`<strong>${bus.bus_name}</strong><br>${bus.bus_number}<br>Speed: ${Math.round(bus.current_location.speed)} km/h`);
+                marker.on("click", () => selectBus(bId, true));
                 marker.addTo(elements.map);
-                state.busMarkers[busId] = marker;
+                state.busMarkers[bId] = marker;
             }
         });
 
-        // Remove markers that are no longer matching the current filter
-        Object.keys(state.busMarkers).forEach(busId => {
-            if (!currentBusIdsInView.has(busId)) {
-                elements.map.removeLayer(state.busMarkers[busId]);
-                delete state.busMarkers[busId];
+        // Prune removed markers
+        Object.keys(state.busMarkers).forEach(bId => {
+            if (!currentIds.has(bId)) {
+                elements.map.removeLayer(state.busMarkers[bId]);
+                delete state.busMarkers[bId];
             }
         });
     }
 
-    function generatePopupHTML(bus) {
-        const speed = bus.current_location ? `${Math.round(bus.current_location.speed)} km/h` : 'N/A';
-        const isOnline = bus.is_online;
-        const statusBadge = isOnline ? '<span class="popup-speed">ONLINE</span>' : '<span class="popup-speed" style="background:rgba(239,68,68,0.2);color:#ef4444;">OFFLINE</span>';
-
-        return `
-            <div class="popup-content">
-                <div class="popup-header">
-                    <span class="popup-title">${bus.bus_id}</span>
-                    ${statusBadge}
-                </div>
-                <div class="popup-route">${bus.route_name}</div>
-                <div class="popup-info-line">
-                    <i class="fa-solid fa-gauge-high"></i> Speed: <strong>${speed}</strong>
-                </div>
-                <div class="popup-info-line">
-                    <i class="fa-solid fa-user"></i> Driver: ${bus.driver_name}
-                </div>
-            </div>
-        `;
-    }
-
-    // ==========================================
-    // 3. UI RENDERING & COUNTERS
-    // ==========================================
-    function updateMetricsUI() {
-        elements.statTotalCount.textContent = state.metrics.total_buses || 0;
-        elements.statOnlineCount.textContent = state.metrics.online_buses || 0;
-        elements.statOfflineCount.textContent = state.metrics.offline_buses || 0;
-        elements.mobileOnlineCount.textContent = state.metrics.online_buses || 0;
-        elements.filteredCountBadge.textContent = `${state.buses.length} buses`;
-    }
-
-    function updateRoutesDropdown() {
-        const currentSelection = elements.routeFilterSelect.value;
-        
-        // Preserve selected route or 'all'
-        elements.routeFilterSelect.innerHTML = '<option value="all">All Routes</option>';
-        
-        state.routes.forEach(route => {
-            const option = document.createElement("option");
-            option.value = route;
-            option.textContent = route;
-            if (route === currentSelection) option.selected = true;
-            elements.routeFilterSelect.appendChild(option);
-        });
-    }
-
-    function renderBusCardsList() {
-        elements.busCardsList.innerHTML = "";
-
-        if (state.buses.length === 0) {
-            elements.busCardsList.innerHTML = `
-                <div class="empty-state-card">
-                    <div class="empty-icon"><i class="fa-solid fa-satellite-dish"></i></div>
-                    <h4>No Active Buses</h4>
-                    <p>No bus tracking data available yet.<br>Transmit GPS coordinates to start tracking.</p>
-                </div>
-            `;
-            return;
-        }
-
-        state.buses.forEach(bus => {
-            const isSelected = (bus.bus_id === state.selectedBusId);
-            const isOnline = bus.is_online;
-            const statusClass = isOnline ? "online" : "offline";
-            const speed = bus.current_location ? `${Math.round(bus.current_location.speed)} km/h` : "Stopped";
-            const timeAgo = formatTimeAgo(bus.current_location ? bus.current_location.updated_at : null);
-
-            const card = document.createElement("div");
-            card.className = `bus-card ${statusClass} ${isSelected ? "active" : ""}`;
-            card.dataset.busId = bus.bus_id;
-
-            card.innerHTML = `
-                <div class="card-top">
-                    <span class="card-bus-id">${bus.bus_id}</span>
-                    <span class="card-status-badge ${statusClass}">${statusClass}</span>
-                </div>
-                <div class="card-route">${bus.route_name}</div>
-                <div class="card-bottom">
-                    <span><i class="fa-solid fa-user-tie"></i> ${bus.driver_name}</span>
-                    <span class="card-speed"><i class="fa-solid fa-gauge-high"></i> ${speed}</span>
-                </div>
-            `;
-
-            card.addEventListener("click", () => selectBus(bus.bus_id));
-            elements.busCardsList.appendChild(card);
-        });
-    }
-
-    // Select Bus Action
-    function selectBus(busId) {
-        state.selectedBusId = busId;
-        const bus = state.buses.find(b => b.bus_id === busId);
-        
-        if (!bus) return;
-
-        // Highlight bus card in sidebar
-        document.querySelectorAll(".bus-card").forEach(card => {
-            if (card.dataset.busId === busId) {
-                card.classList.add("active");
-                card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            } else {
-                card.classList.remove("active");
-            }
-        });
-
-        // Refresh markers to show selected state
-        updateMapMarkers();
-
-        // Open Leaflet Popup and Center Map
-        if (state.busMarkers[busId]) {
-            const marker = state.busMarkers[busId];
-            marker.openPopup();
-            if (bus.current_location) {
-                elements.map.flyTo([bus.current_location.latitude, bus.current_location.longitude], 15, {
-                    duration: 1.2
-                });
-            }
-        }
-
-        // Show Detail Drawer in Sidebar
-        populateDetailDrawer(bus);
-        elements.busDetailDrawer.classList.remove("hidden");
-    }
-
-    async function populateDetailDrawer(bus) {
-        elements.detailBusId.textContent = bus.bus_id;
-        elements.detailBusNumber.textContent = bus.bus_number;
-        
-        const isOnline = bus.is_online;
-        elements.detailStatusIndicator.className = `status-indicator-bar ${isOnline ? "online" : "offline"}`;
-        elements.detailStatusText.textContent = isOnline ? "ONLINE - LIVE SYNC" : "OFFLINE";
-        
-        elements.detailRouteName.textContent = bus.route_name;
-        
-        if (bus.current_location) {
-            elements.detailSpeed.textContent = `${Math.round(bus.current_location.speed)} km/h`;
-            elements.detailHeading.textContent = `${Math.round(bus.current_location.heading)}°`;
-            elements.detailCoordinates.textContent = `${bus.current_location.latitude.toFixed(6)}, ${bus.current_location.longitude.toFixed(6)}`;
-            elements.detailLastUpdated.textContent = formatTimeAgo(bus.current_location.updated_at);
-        } else {
-            elements.detailSpeed.textContent = "N/A";
-            elements.detailHeading.textContent = "N/A";
-            elements.detailCoordinates.textContent = "No coordinates yet";
-            elements.detailLastUpdated.textContent = "Never";
-        }
-
-        elements.detailDriverName.textContent = bus.driver_name;
-        elements.detailDriverPhone.textContent = bus.driver_phone;
-
-        // Fetch available history dates for this bus to populate drawer date select
+    async function loadAndDisplayRoutePath(bus) {
         try {
-            const res = await fetch(`/api/buses/${bus.bus_id}/history?limit=1`);
+            // First check if bus has detected/assigned routes
+            const res = await fetch(`/api/buses/${bus.bus_id}/routes`);
             const data = await res.json();
-            if (data.available_dates && elements.drawerHistoryDateSelect) {
-                const currentVal = elements.drawerHistoryDateSelect.value;
-                elements.drawerHistoryDateSelect.innerHTML = '<option value="all">Latest / All Available</option>';
-                data.available_dates.forEach(d => {
-                    const opt = document.createElement("option");
-                    opt.value = d;
-                    opt.textContent = `Date: ${d}`;
-                    elements.drawerHistoryDateSelect.appendChild(opt);
-                });
-                if (data.available_dates.includes(currentVal)) {
-                    elements.drawerHistoryDateSelect.value = currentVal;
+            const routes = data.routes || [];
+
+            let waypoints = null;
+            if (routes.length > 0 && routes[0].waypoints) {
+                waypoints = routes[0].waypoints;
+            } else {
+                // Fallback to route endpoints
+                const allRoutesRes = await fetch("/api/routes");
+                const allRoutesData = await allRoutesRes.json();
+                const matched = (allRoutesData.routes || []).find(r => r.id === bus.route_id);
+                if (matched && matched.waypoints) {
+                    waypoints = matched.waypoints;
                 }
             }
-        } catch (e) {
-            console.error("Error fetching dates:", e);
-        }
-    }
 
-    // Toggle Bus History Polyline Path with Date Filtering
-    async function toggleHistoryPath(forceDate = null) {
-        if (!state.selectedBusId) return;
-
-        // If polyline already visible and not forcing a specific date, remove it
-        if (state.historyPolyline && !forceDate) {
-            clearHistoryOnMap();
-            elements.toggleHistoryBtn.classList.remove("btn-primary");
-            elements.toggleHistoryBtn.classList.add("btn-secondary");
-            elements.toggleHistoryBtn.innerHTML = '<i class="fa-solid fa-timeline"></i> View History Path';
-            return;
-        }
-
-        clearHistoryOnMap();
-
-        try {
-            const chosenDate = forceDate || elements.drawerHistoryDateSelect.value;
-            const queryParam = (chosenDate && chosenDate !== "all") ? `&date=${chosenDate}` : "";
-            const response = await fetch(`/api/buses/${state.selectedBusId}/history?limit=500${queryParam}`);
-            const data = await response.json();
-
-            if (!data.history || data.history.length === 0) {
-                alert(`No historical location pings available for ${state.selectedBusId} on ${chosenDate}`);
-                return;
+            if (waypoints && waypoints.length > 0) {
+                if (state.routePolyline) {
+                    elements.map.removeLayer(state.routePolyline);
+                }
+                state.routePolyline = L.polyline(waypoints, {
+                    color: '#2563eb',
+                    weight: 4,
+                    opacity: 0.85
+                }).addTo(elements.map);
             }
-
-            const latLngs = data.history.map(h => [h.latitude, h.longitude]);
-
-            // Draw glowing polyline
-            state.historyPolyline = L.polyline(latLngs, {
-                color: '#00d2ff',
-                weight: 4,
-                opacity: 0.85,
-                dashArray: '6, 6'
-            }).addTo(elements.map);
-
-            // Add waypoint circles along the route
-            data.history.forEach((h, idx) => {
-                const isFirst = (idx === 0);
-                const isLast = (idx === data.history.length - 1);
-                const markerColor = isLast ? '#10b981' : isFirst ? '#f59e0b' : '#00d2ff';
-
-                const waypoint = L.circleMarker([h.latitude, h.longitude], {
-                    radius: isFirst || isLast ? 6 : 4,
-                    fillColor: markerColor,
-                    color: '#fff',
-                    weight: 1.5,
-                    opacity: 1,
-                    fillOpacity: 0.9
-                });
-
-                const popupHtml = `
-                    <div class="popup-content">
-                        <div class="popup-header">
-                            <span class="popup-title">${h.bus_no || h.bus_id} Point #${idx + 1}</span>
-                        </div>
-                        <div class="popup-info-line"><i class="fa-solid fa-calendar"></i> Date: <strong>${h.date || 'N/A'}</strong></div>
-                        <div class="popup-info-line"><i class="fa-solid fa-clock"></i> Time: <strong>${h.time || 'N/A'}</strong></div>
-                        <div class="popup-info-line"><i class="fa-solid fa-location-dot"></i> Lat, Lng: <strong>${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}</strong></div>
-                        <div class="popup-info-line"><i class="fa-solid fa-gauge-high"></i> Speed: <strong>${Math.round(h.speed)} km/h</strong></div>
-                    </div>
-                `;
-                waypoint.bindPopup(popupHtml);
-                waypoint.addTo(elements.map);
-                state.historyMarkers.push(waypoint);
-            });
-
-            elements.map.fitBounds(state.historyPolyline.getBounds(), { padding: [50, 50] });
-
-            elements.toggleHistoryBtn.classList.remove("btn-secondary");
-            elements.toggleHistoryBtn.classList.add("btn-primary");
-            elements.toggleHistoryBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Hide History Path';
-
-        } catch (error) {
-            console.error("Error fetching bus history:", error);
+        } catch (e) {
+            console.error("Error loading route polyline:", e);
         }
-    }
-
-    function clearHistoryOnMap() {
-        if (state.historyPolyline) {
-            elements.map.removeLayer(state.historyPolyline);
-            state.historyPolyline = null;
-        }
-        state.historyMarkers.forEach(m => elements.map.removeLayer(m));
-        state.historyMarkers = [];
-    }
-
-    function populateAdminBusSelect() {
-        if (!elements.adminHistoryBusSelect) return;
-        const currentVal = elements.adminHistoryBusSelect.value;
-        elements.adminHistoryBusSelect.innerHTML = '<option value="">Select Bus Number...</option>';
-        state.buses.forEach(b => {
-            const opt = document.createElement("option");
-            opt.value = b.bus_id;
-            opt.textContent = `${b.bus_id} - ${b.bus_number} (${b.route_name})`;
-            elements.adminHistoryBusSelect.appendChild(opt);
-        });
-        if (currentVal) elements.adminHistoryBusSelect.value = currentVal;
     }
 
     // ==========================================
-    // 4. AUTO-REFRESH & TIMERS
+    // 6. EVENT LISTENERS
+    // ==========================================
+    function setupEventListeners() {
+        // Search Filter
+        elements.busSearchInput.addEventListener("input", (e) => {
+            state.searchQuery = e.target.value.trim();
+            elements.clearSearchBtn.classList.toggle("hidden", state.searchQuery.length === 0);
+            renderBusesList();
+        });
+
+        elements.clearSearchBtn.addEventListener("click", () => {
+            elements.busSearchInput.value = "";
+            state.searchQuery = "";
+            elements.clearSearchBtn.classList.add("hidden");
+            renderBusesList();
+        });
+
+        // Quick Status Tabs (All / Connected / Offline)
+        elements.statusTabBtns.forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                elements.statusTabBtns.forEach(b => b.classList.remove("active"));
+                e.currentTarget.classList.add("active");
+                state.activeFilter = e.currentTarget.dataset.filter;
+                renderBusesList();
+            });
+        });
+
+        // 1-Click Copy Coordinates
+        elements.hudCopyCoordsBtn.addEventListener("click", () => {
+            const coords = elements.hudCoordsVal.textContent;
+            if (coords && coords !== "Waiting for GPS fix...") {
+                navigator.clipboard.writeText(coords).then(() => {
+                    showToast("GPS coordinates copied to clipboard!", "success");
+                }).catch(() => {
+                    showToast("Failed to copy coordinates", "error");
+                });
+            }
+        });
+
+        // Map Control: Center Selected Bus
+        elements.centerSelectedBusBtn.addEventListener("click", () => {
+            if (state.selectedBusId) {
+                const bus = state.buses.find(b => b.bus_id === state.selectedBusId);
+                if (bus && bus.current_location) {
+                    elements.map.flyTo([bus.current_location.latitude, bus.current_location.longitude], 16, { duration: 1.0 });
+                }
+            }
+        });
+
+        // Map Control: Fit All Buses
+        elements.fitAllBusesBtn.addEventListener("click", () => {
+            const markers = Object.values(state.busMarkers);
+            if (markers.length > 0) {
+                const group = L.featureGroup(markers);
+                elements.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+            }
+        });
+
+        // Mobile Tabs Switching
+        elements.mobileTabBusesBtn.addEventListener("click", () => switchMobileTab("buses"));
+        elements.mobileTabMapBtn.addEventListener("click", () => switchMobileTab("map"));
+
+        // Register Bus Modal
+        elements.openRegisterModalBtn.addEventListener("click", () => {
+            elements.registerBusModal.classList.remove("hidden");
+        });
+
+        elements.closeRegisterModalBtn.addEventListener("click", () => {
+            elements.registerBusModal.classList.add("hidden");
+        });
+
+        // Simple Register Bus Form Submission
+        elements.simpleAddBusForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const busData = {
+                bus_name: document.getElementById("newBusName").value.trim(),
+                bus_id: document.getElementById("newBusId").value.trim().toUpperCase(),
+                bus_number: document.getElementById("newBusNumber").value.trim(),
+                device_id: document.getElementById("newDeviceId").value.trim(),
+                campus: "Sphoorthy Campus Lead",
+                route_id: document.getElementById("newRouteSelect").value,
+                route_name: document.getElementById("newRouteSelect").selectedOptions[0].text,
+                driver_name: document.getElementById("newDriverName").value.trim() || "Unassigned",
+                driver_phone: document.getElementById("newDriverPhone").value.trim() || "N/A"
+            };
+
+            try {
+                const res = await fetch("/api/buses", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(busData)
+                });
+                const data = await res.json();
+
+                if (res.ok && data.status === "success") {
+                    showToast(`Bus ${busData.bus_name} registered successfully!`, "success");
+                    elements.simpleAddBusForm.reset();
+                    elements.registerBusModal.classList.add("hidden");
+                    fetchBuses();
+                } else {
+                    showToast(data.message || "Failed to register bus", "error");
+                }
+            } catch (err) {
+                showToast("Network error registering bus", "error");
+            }
+        });
+    }
+
+    function switchMobileTab(tab) {
+        state.mobileActiveTab = tab;
+        elements.mobileTabBusesBtn.classList.toggle("active", tab === "buses");
+        elements.mobileTabMapBtn.classList.toggle("active", tab === "map");
+
+        if (tab === "buses") {
+            elements.busSelectorPanel.classList.remove("mobile-hidden");
+            elements.liveMapPanel.classList.add("mobile-hidden");
+        } else {
+            elements.busSelectorPanel.classList.add("mobile-hidden");
+            elements.liveMapPanel.classList.remove("mobile-hidden");
+            setTimeout(() => elements.map.invalidateSize(), 200);
+        }
+    }
+
+    // ==========================================
+    // 7. AUTO REFRESH LOOP
     // ==========================================
     function startAutoRefreshLoop() {
         fetchBuses();
@@ -521,284 +525,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 state.countdownRemaining = state.autoRefreshInterval;
                 fetchBuses();
             }
-            elements.nextRefreshCountdown.textContent = `${state.countdownRemaining}s`;
         }, 1000);
     }
 
     // ==========================================
-    // 5. EVENT LISTENERS
+    // 8. UTILITIES
     // ==========================================
-    function setupEventListeners() {
-        // Mobile Sidebar Controls
-        elements.openSidebarBtn.addEventListener("click", () => {
-            elements.sidebar.classList.add("open");
-        });
-
-        elements.closeSidebarBtn.addEventListener("click", () => {
-            elements.sidebar.classList.remove("open");
-        });
-
-        // Search Input
-        elements.busSearchInput.addEventListener("input", (e) => {
-            state.activeFilters.search = e.target.value.trim();
-            elements.clearSearchBtn.classList.toggle("hidden", !state.activeFilters.search);
-            fetchBuses();
-        });
-
-        elements.clearSearchBtn.addEventListener("click", () => {
-            elements.busSearchInput.value = "";
-            state.activeFilters.search = "";
-            elements.clearSearchBtn.classList.add("hidden");
-            fetchBuses();
-        });
-
-        // Dropdown Filters
-        elements.routeFilterSelect.addEventListener("change", (e) => {
-            state.activeFilters.route = e.target.value;
-            fetchBuses();
-        });
-
-        elements.statusFilterSelect.addEventListener("change", (e) => {
-            state.activeFilters.status = e.target.value;
-            fetchBuses();
-        });
-
-        // Quick Stats Filters
-        elements.filterStatTotal.addEventListener("click", () => {
-            elements.statusFilterSelect.value = "all";
-            state.activeFilters.status = "all";
-            fetchBuses();
-        });
-
-        elements.filterStatOnline.addEventListener("click", () => {
-            elements.statusFilterSelect.value = "online";
-            state.activeFilters.status = "online";
-            fetchBuses();
-        });
-
-        elements.filterStatOffline.addEventListener("click", () => {
-            elements.statusFilterSelect.value = "offline";
-            state.activeFilters.status = "offline";
-            fetchBuses();
-        });
-
-        // Drawer buttons
-        elements.closeDrawerBtn.addEventListener("click", () => {
-            elements.busDetailDrawer.classList.add("hidden");
-            state.selectedBusId = null;
-            clearHistoryOnMap();
-            elements.toggleHistoryBtn.classList.remove("btn-primary");
-            elements.toggleHistoryBtn.classList.add("btn-secondary");
-            elements.toggleHistoryBtn.innerHTML = '<i class="fa-solid fa-timeline"></i> View History Path';
-            updateMapMarkers();
-            renderBusCardsList();
-        });
-
-        elements.centerMapBtn.addEventListener("click", () => {
-            if (state.selectedBusId && state.busMarkers[state.selectedBusId]) {
-                const marker = state.busMarkers[state.selectedBusId];
-                elements.map.flyTo(marker.getLatLng(), 16);
-            }
-        });
-
-        elements.toggleHistoryBtn.addEventListener("click", () => toggleHistoryPath());
-        
-        if (elements.drawerHistoryDateSelect) {
-            elements.drawerHistoryDateSelect.addEventListener("change", () => {
-                if (state.historyPolyline) {
-                    toggleHistoryPath(elements.drawerHistoryDateSelect.value);
-                }
-            });
-        }
-
-        // Fit All Markers Button
-        elements.mapFitBoundsBtn.addEventListener("click", () => {
-            const markerGroup = L.featureGroup(Object.values(state.busMarkers));
-            if (markerGroup.getLayers().length > 0) {
-                elements.map.fitBounds(markerGroup.getBounds(), { padding: [50, 50] });
-            }
-        });
-
-        // Manual Refresh Click
-        elements.manualRefreshIcon.parentElement.addEventListener("click", () => {
-            state.countdownRemaining = state.autoRefreshInterval;
-            elements.nextRefreshCountdown.textContent = `${state.countdownRemaining}s`;
-            fetchBuses();
-        });
-
-        // Admin Modal Controls
-        elements.openAdminBtn.addEventListener("click", () => {
-            elements.adminModal.classList.remove("hidden");
-            populateAdminBusSelect();
-            if (elements.adminHistoryDateInput && !elements.adminHistoryDateInput.value) {
-                elements.adminHistoryDateInput.value = new Date().toISOString().split('T')[0];
-            }
-        });
-
-        elements.closeAdminModalBtn.addEventListener("click", () => {
-            elements.adminModal.classList.add("hidden");
-        });
-
-        // Admin Tabs Switching
-        if (elements.tabHistoryAuditBtn && elements.tabAddBusBtn) {
-            elements.tabHistoryAuditBtn.addEventListener("click", () => {
-                elements.tabHistoryAuditBtn.classList.add("active");
-                elements.tabAddBusBtn.classList.remove("active");
-                elements.adminHistorySection.classList.remove("hidden");
-                elements.adminAddBusSection.classList.add("hidden");
-                populateAdminBusSelect();
-            });
-
-            elements.tabAddBusBtn.addEventListener("click", () => {
-                elements.tabAddBusBtn.classList.add("active");
-                elements.tabHistoryAuditBtn.classList.remove("active");
-                elements.adminAddBusSection.classList.remove("hidden");
-                elements.adminHistorySection.classList.add("hidden");
-            });
-        }
-
-        // Admin History "View Locations" Action
-        if (elements.adminViewLocationsBtn) {
-            elements.adminViewLocationsBtn.addEventListener("click", async () => {
-                const busId = elements.adminHistoryBusSelect.value;
-                const chosenDate = elements.adminHistoryDateInput.value;
-
-                if (!busId) {
-                    alert("Please select a Bus Number first");
-                    return;
-                }
-
-                try {
-                    const dateQuery = chosenDate ? `&date=${chosenDate}` : "";
-                    const res = await fetch(`/api/buses/${busId}/history?limit=500${dateQuery}`);
-                    const data = await res.json();
-
-                    if (!data.history || data.history.length === 0) {
-                        elements.adminHistoryTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px;">No location records found for ${busId} on ${chosenDate || 'selected date'}.</td></tr>`;
-                        elements.adminHistoryCountBadge.textContent = "0 Locations Found";
-                        elements.adminHistoryResults.classList.remove("hidden");
-                        return;
-                    }
-
-                    elements.adminHistoryCountBadge.textContent = `${data.history.length} Locations Recorded`;
-                    elements.adminHistoryTableBody.innerHTML = "";
-
-                    data.history.forEach((h, idx) => {
-                        const tr = document.createElement("tr");
-                        tr.innerHTML = `
-                            <td>${idx + 1}</td>
-                            <td><strong style="color:var(--accent);">${h.time || 'N/A'}</strong></td>
-                            <td>${h.date || 'N/A'}</td>
-                            <td>${h.latitude.toFixed(6)}</td>
-                            <td>${h.longitude.toFixed(6)}</td>
-                            <td>${Math.round(h.speed)} km/h</td>
-                            <td>${Math.round(h.heading)}°</td>
-                        `;
-                        elements.adminHistoryTableBody.appendChild(tr);
-                    });
-
-                    elements.adminHistoryResults.classList.remove("hidden");
-
-                } catch (e) {
-                    console.error("Error loading history:", e);
-                    alert("Failed to retrieve location history for bus");
-                }
-            });
-        }
-
-        // Admin "Show on Map" button
-        if (elements.adminShowOnMapBtn) {
-            elements.adminShowOnMapBtn.addEventListener("click", () => {
-                const busId = elements.adminHistoryBusSelect.value;
-                const chosenDate = elements.adminHistoryDateInput.value;
-                if (!busId) return;
-
-                // Close admin modal
-                elements.adminModal.classList.add("hidden");
-
-                // Select bus and trigger history on map
-                selectBus(busId);
-                setTimeout(() => {
-                    toggleHistoryPath(chosenDate);
-                }, 300);
-            });
-        }
-
-        // Admin Login Form
-        elements.adminLoginForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const username = elements.adminUsernameInput.value.trim();
-            const password = elements.adminPasswordInput.value.trim();
-
-            try {
-                const response = await fetch("/api/admin/login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await response.json();
-                if (response.ok && data.status === "success") {
-                    state.isAdmin = true;
-                    elements.adminLoginForm.reset();
-                    elements.adminLoginError.classList.add("hidden");
-                    elements.adminLoginView.classList.add("hidden");
-                    elements.adminDashboardView.classList.remove("hidden");
-                    populateAdminBusSelect();
-                } else {
-                    elements.adminLoginError.textContent = data.message || "Invalid credentials";
-                    elements.adminLoginError.classList.remove("hidden");
-                }
-            } catch (err) {
-                elements.adminLoginError.textContent = "Network error while signing in";
-                elements.adminLoginError.classList.remove("hidden");
-            }
-        });
-
-        // Admin Logout
-        elements.adminLogoutBtn.addEventListener("click", async () => {
-            await fetch("/api/admin/logout", { method: "POST" });
-            state.isAdmin = false;
-            elements.adminDashboardView.classList.add("hidden");
-            elements.adminLoginView.classList.remove("hidden");
-        });
-
-        // Add New Bus Form
-        elements.addBusForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const newBus = {
-                bus_id: document.getElementById("newBusId").value.trim().toUpperCase(),
-                bus_number: document.getElementById("newBusNumber").value.trim(),
-                route_name: document.getElementById("newRouteName").value.trim(),
-                driver_name: document.getElementById("newDriverName").value.trim(),
-                driver_phone: document.getElementById("newDriverPhone").value.trim(),
-                capacity: parseInt(document.getElementById("newCapacity").value, 10)
-            };
-
-            try {
-                const response = await fetch("/api/admin/buses", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(newBus)
-                });
-                const data = await response.json();
-
-                if (response.ok && data.status === "success") {
-                    elements.addBusForm.reset();
-                    elements.adminFormMsg.textContent = `Bus ${newBus.bus_id} registered successfully!`;
-                    elements.adminFormMsg.classList.remove("hidden");
-                    setTimeout(() => elements.adminFormMsg.classList.add("hidden"), 3000);
-                    fetchBuses();
-                } else {
-                    alert(data.message || "Error adding bus");
-                }
-            } catch (err) {
-                alert("Failed to create new bus");
-            }
-        });
-    }
-
-    // Utility: Format ISO Timestamp to Relative Time Ago
     function formatTimeAgo(isoString) {
         if (!isoString) return "Never";
         try {
@@ -817,7 +549,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // App Initialization
+    function showToast(message, type = "info") {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        const icon = type === "success" ? "fa-circle-check" : "fa-circle-info";
+        toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+        elements.toastContainer.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = "0";
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // ==========================================
+    // 9. INITIALIZE APPLICATION
+    // ==========================================
     initMap();
     setupEventListeners();
     startAutoRefreshLoop();
