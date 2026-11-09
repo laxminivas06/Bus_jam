@@ -16,7 +16,7 @@
 #define DEVICE_ID  "AIV-DEV-001"
 
 // Set your backend server URL (supports both http:// and https://)
-const char* SERVER_URL = "http://192.168.1.100:5001"; // Or "https://your-deployed-server.com"
+const char* SERVER_URL = "https://trackbus.pythonanywhere.com/"; // Or "https://your-deployed-server.com"
 
 // ======================================
 // NETWORK & API CREDENTIALS
