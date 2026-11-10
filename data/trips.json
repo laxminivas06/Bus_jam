@@ -36,15 +36,18 @@
       17.3156,
       78.5833
     ],
-    "end_time": null,
-    "end_coordinates": null,
+    "end_time": "02:36 AM",
+    "end_coordinates": [
+      17.3156,
+      78.5833
+    ],
     "distance_km": 7.44,
-    "status": "RUNNING",
-    "arrival_time": null,
+    "status": "COMPLETED",
+    "arrival_time": "02:36 AM",
     "last_lat": 17.3256,
     "last_lng": 78.5933,
     "created_at": "2026-11-10T02:23:16.225109+00:00",
-    "updated_at": "2026-11-10T02:23:16.225109+00:00"
+    "updated_at": "2026-11-10T02:36:05.170955+00:00"
   },
   {
     "id": "TRIP-BUS-01-20261109-1",

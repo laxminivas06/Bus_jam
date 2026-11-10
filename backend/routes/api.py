@@ -1381,6 +1381,7 @@ def save_location():
         "success": True,
         "status": "success",
         "message": "Location saved",
+        "location": saved_location,
         "data": {
             "bus_no": bus_id,
             "deviceId": bus.device_id,
@@ -1400,6 +1401,9 @@ def save_location():
             "date": saved_location["date"],
             "time": saved_location["time"],
             "timestamp": saved_location["timestamp"],
+            "status": saved_location.get("status"),
+            "is_at_college": saved_location.get("is_at_college", False),
+            "distance_to_college_m": saved_location.get("distance_to_college_m"),
             "geofence": geofence_status,
             "deviation": {
                 "is_deviating": is_deviating,
@@ -1516,10 +1520,24 @@ def get_single_route(route_id):
 
 
 @api_bp.route("/routes", methods=["POST"])
+@admin_required
 def create_route():
     """Create a new route."""
     data = request.get_json(silent=True) or {}
+    route_name = data.get("route_name")
+    if not route_name:
+        return jsonify({"status": "error", "message": "Route Name is required"}), 400
     new_route = db_instance.create_route(data)
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="ROUTE_CREATE",
+        target_type="ROUTE",
+        target_id=new_route["id"],
+        details=f"Created route {new_route['route_name']}",
+        ip_address=request.remote_addr
+    )
     return jsonify({"status": "success", "message": "Route created", "route": new_route}), 201
 
 
@@ -1532,6 +1550,7 @@ def get_stops():
 
 
 @api_bp.route("/stops", methods=["POST"])
+@admin_required
 def create_stop():
     """Add a new bus stop with geofence."""
     data = request.get_json(silent=True) or {}
@@ -2111,31 +2130,7 @@ def get_route_route(route_id):
     }), 200
 
 
-@api_bp.route("/routes", methods=["POST"])
-@admin_required
-def create_route_route():
-    """Create a new bus transit route."""
-    data = request.get_json(silent=True) or {}
-    route_name = data.get("route_name")
-    if not route_name:
-        return jsonify({"status": "error", "message": "Route Name is required"}), 400
 
-    new_r = db_instance.create_route(data)
-    admin_user = session.get("user", {}).get("username") or "admin"
-    db_instance.record_audit_log(
-        username=admin_user,
-        role="ADMIN",
-        action="ROUTE_CREATE",
-        target_type="ROUTE",
-        target_id=new_r["id"],
-        details=f"Created route {new_r['route_name']} ({new_r.get('origin')} -> {new_r.get('destination')})",
-        ip_address=request.remote_addr
-    )
-    return jsonify({
-        "status": "success",
-        "message": f"Route '{new_r['route_name']}' created successfully",
-        "route": new_r
-    }), 201
 
 
 @api_bp.route("/routes/<route_id>", methods=["PUT"])

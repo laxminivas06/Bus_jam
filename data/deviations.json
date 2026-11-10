@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "DEV-0001",
+    "bus_id": "BUS-01",
+    "route_name": "Route 01: Koti Central -> Campus Terminal",
+    "start_time": "2026-11-10T02:36:05.236137+00:00",
+    "end_time": null,
+    "max_deviation_m": 12819.047620585037,
+    "start_latitude": 17.3156,
+    "start_longitude": 78.5833,
+    "status": "ACTIVE",
+    "date": "10-11-2026"
+  }
+]
