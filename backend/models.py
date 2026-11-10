@@ -65,8 +65,12 @@ class Bus:
                 connection_status = "offline"
 
         # Determine current route status description
+        is_reached_college = bool(curr_loc and (curr_loc.get("is_at_college") or curr_loc.get("status") == "REACHED_COLLEGE"))
+
         current_route_status = "Stationary at Terminal"
-        if is_moving:
+        if is_reached_college:
+            current_route_status = "Reached College"
+        elif is_moving:
             current_route_status = f"En Route: {self.route_name}"
         elif is_stopped:
             current_route_status = f"Stopped on: {self.route_name}"
@@ -99,6 +103,7 @@ class Bus:
             "is_online": is_online,
             "is_moving": is_moving,
             "is_stopped": is_stopped,
+            "is_reached_college": is_reached_college,
             "has_gps_issue": has_gps_issue,
             "total_routes_detected": total_routes_detected,
             "device_health": device_health,

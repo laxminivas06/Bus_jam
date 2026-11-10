@@ -1,6 +1,10 @@
 import io
 import csv
 import math
+import json
+import functools
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request, current_app, session, Response
 from backend.json_db import db_instance
@@ -16,6 +20,30 @@ from backend.route_engine import (
 )
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+# Predefined Hyderabad & Campus Transit Landmark Geocoding Dictionary
+LOCAL_LANDMARKS = [
+    {"name": "Sphoorthy Engineering College", "display_name": "Sphoorthy Engineering College, Sagar Road, Nadargul, Hyderabad", "latitude": 17.3156, "longitude": 78.5833},
+    {"name": "Koti Central Bus Station", "display_name": "Koti Central Bus Terminal, Hyderabad, Telangana", "latitude": 17.385044, "longitude": 78.486671},
+    {"name": "Abids GPO Circle", "display_name": "Abids GPO Circle, Hyderabad, Telangana", "latitude": 17.391200, "longitude": 78.474500},
+    {"name": "Lakdi-ka-pul Junction", "display_name": "Lakdi-ka-pul Junction & Metro, Hyderabad, Telangana", "latitude": 17.402100, "longitude": 78.461000},
+    {"name": "Punjagutta Circle", "display_name": "Punjagutta Circle, Nagarjuna Hills, Hyderabad, Telangana", "latitude": 17.425500, "longitude": 78.451200},
+    {"name": "Secunderabad Railway Station", "display_name": "Secunderabad Junction & Bus Stand, Telangana", "latitude": 17.439930, "longitude": 78.498274},
+    {"name": "Paradise Circle", "display_name": "Paradise Circle, MG Road, Secunderabad, Telangana", "latitude": 17.443500, "longitude": 78.487000},
+    {"name": "Begumpet Airport Road", "display_name": "Begumpet Airport Road, Hyderabad, Telangana", "latitude": 17.441100, "longitude": 78.471200},
+    {"name": "LB Nagar Metro Station", "display_name": "LB Nagar Ring Road & Metro Station, Hyderabad, Telangana", "latitude": 17.345719, "longitude": 78.552230},
+    {"name": "Dilsukhnagar Bus Complex", "display_name": "Dilsukhnagar Bus Depot & Complex, Hyderabad, Telangana", "latitude": 17.368800, "longitude": 78.524500},
+    {"name": "Malakpet Terminal", "display_name": "Malakpet Gunj & Bus Station, Hyderabad, Telangana", "latitude": 17.375500, "longitude": 78.498000},
+    {"name": "Uppal Ring Road", "display_name": "Uppal Ring Road & Metro Junction, Hyderabad, Telangana", "latitude": 17.398400, "longitude": 78.558300},
+    {"name": "Charminar Monument", "display_name": "Charminar Old City, Hyderabad, Telangana", "latitude": 17.361600, "longitude": 78.474700},
+    {"name": "Mehdipatnam Depot", "display_name": "Mehdipatnam Bus Station & Junction, Hyderabad, Telangana", "latitude": 17.391600, "longitude": 78.439800},
+    {"name": "Ameerpet Metro Hub", "display_name": "Ameerpet Junction & Interchange Station, Hyderabad, Telangana", "latitude": 17.437500, "longitude": 78.448300},
+    {"name": "Kukatpally Y Junction", "display_name": "Kukatpally Housing Board & Y Junction, Hyderabad, Telangana", "latitude": 17.493800, "longitude": 78.399500},
+    {"name": "Miyapur Metro Terminal", "display_name": "Miyapur Allwyn Junction & Metro Terminal, Hyderabad", "latitude": 17.496800, "longitude": 78.361400},
+    {"name": "Hitec City Cyber Towers", "display_name": "Cyber Towers, Hitec City, Madhapur, Hyderabad", "latitude": 17.450400, "longitude": 78.380800},
+    {"name": "Gachibowli Stadium", "display_name": "Gachibowli ORR Junction & Stadium, Hyderabad", "latitude": 17.440100, "longitude": 78.348900},
+    {"name": "Main Campus Gate 1", "display_name": "Sphoorthy Main Campus Gate 1, Sagar Highway, Hyderabad", "latitude": 17.316200, "longitude": 78.584100}
+]
 
 
 def calculate_speed_and_heading(prev_lat, prev_lng, prev_time_iso, curr_lat, curr_lng, curr_time):
@@ -58,6 +86,9 @@ def verify_device_auth():
 
 def verify_admin_auth():
     """Verify admin session or HTTP Authorization header."""
+    user = session.get("user")
+    if user and user.get("role") == "ADMIN":
+        return True
     if session.get("is_admin"):
         return True
 
@@ -71,6 +102,19 @@ def verify_admin_auth():
         return True
 
     return False
+
+
+def admin_required(fn):
+    """Decorator to enforce administrator authentication and role-based access control."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if verify_admin_auth():
+            return fn(*args, **kwargs)
+        return jsonify({
+            "status": "error",
+            "message": "Access denied. Administrator privileges required."
+        }), 403
+    return wrapper
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -440,6 +484,20 @@ def get_buses():
 
     all_buses_dict = [b.to_dict(online_threshold_seconds=threshold) for b in all_buses]
 
+    # Enrich each bus with distance metrics & college arrival status
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%d-%m-%Y")
+
+    for b in all_buses_dict:
+        loc = b.get("current_location") or {}
+        is_reached = bool(loc.get("is_at_college") or loc.get("status") == "REACHED_COLLEGE")
+        b["is_reached_college"] = is_reached
+        if is_reached:
+            b["current_route_status"] = "Reached College"
+
+        # Attach 3 distinct distance calculations (A. Trip Distance, B. Daily Distance, C. 7-Day History)
+        b["distance_metrics"] = db_instance.get_bus_distance_metrics(b["bus_id"])
+
     # Global metrics
     total_count = len(all_buses_dict)
     active_count = sum(1 for b in all_buses_dict if b.get("is_online"))
@@ -448,6 +506,13 @@ def get_buses():
     stopped_count = sum(1 for b in all_buses_dict if b.get("is_stopped"))
     gps_issue_count = sum(1 for b in all_buses_dict if b.get("connection_status") == "gps_unavailable")
     sending_gps_count = sum(1 for b in all_buses_dict if b.get("is_online") and not b.get("has_gps_issue"))
+
+    running_buses_count = sum(1 for b in all_buses_dict if (b.get("is_moving") or (b.get("is_online") and not b.get("is_reached_college"))))
+    reached_college_count = sum(1 for b in all_buses_dict if b.get("is_reached_college"))
+
+    devices_list = db_instance.get_all_devices(compute_status=True)
+    offline_devices_count = sum(1 for d in devices_list if not d.get("is_online"))
+
     all_routes = db_instance.get_all_routes()
     total_routes_detected = len(all_routes)
 
@@ -460,12 +525,11 @@ def get_buses():
     avg_fleet_speed = round(sum(speeds) / len(speeds), 1) if speeds else 0.0
 
     # Today's total distance across fleet
-    now = datetime.now(timezone.utc)
-    today_str = now.strftime("%d-%m-%Y")
-    total_distance_today_km = 0.0
-    for b in all_buses_dict:
-        hist = db_instance.get_bus_history(b["bus_id"], date_filter=today_str, limit=500)
-        total_distance_today_km += hist.get("trip_summary", {}).get("total_distance_km", 0.0)
+    total_distance_today_km = round(sum(b.get("distance_metrics", {}).get("daily_distance_km", 0.0) for b in all_buses_dict), 2)
+
+    # Today's completed trips across fleet
+    today_all_trips = db_instance.get_all_trips(date_filter=today_str)
+    completed_trips_today = sum(1 for t in today_all_trips if t.get("status") == "COMPLETED")
 
     # Today's total active deviations
     today_deviations = db_instance.get_deviations(date_filter=today_str)
@@ -505,6 +569,10 @@ def get_buses():
         bus_list = [b for b in bus_list if b.get("connection_status") in ("offline", "no_data")]
     elif status_filter == "moving":
         bus_list = [b for b in bus_list if b.get("is_moving")]
+    elif status_filter == "running":
+        bus_list = [b for b in bus_list if b.get("is_moving") or (b.get("is_online") and not b.get("is_reached_college"))]
+    elif status_filter in ("reached_college", "college"):
+        bus_list = [b for b in bus_list if b.get("is_reached_college")]
     elif status_filter == "stopped":
         bus_list = [b for b in bus_list if b.get("is_stopped")]
     elif status_filter in ("gps_issue", "gps_unavailable"):
@@ -522,10 +590,15 @@ def get_buses():
             "sending_gps_buses": sending_gps_count,
             "moving_buses": moving_count,
             "stopped_buses": stopped_count,
+            "running_buses": running_buses_count,
+            "reached_college_buses": reached_college_count,
+            "offline_devices": offline_devices_count,
+            "total_devices": len(devices_list),
+            "completed_trips_today": completed_trips_today,
             "gps_unavailable_buses": gps_issue_count,
             "total_routes_detected": total_routes_detected,
             "avg_fleet_speed": avg_fleet_speed,
-            "total_distance_today_km": round(total_distance_today_km, 2),
+            "total_distance_today_km": total_distance_today_km,
             "active_deviations": active_deviations_count,
             "last_update": last_update_ts,
         },
@@ -537,39 +610,102 @@ def get_buses():
 
 @api_bp.route("/buses", methods=["POST"])
 def register_bus():
-    """Create and register a new bus with its ESP device ID."""
+    """
+    Create and register a new bus with its ESP device ID.
+    Requirements:
+    - Bus Name (Required)
+    - Bus ID (Unique identifier)
+    - License Number (Required)
+    - ESP Device ID (Unique hardware identifier, validated)
+    - Driver Name (Required)
+    - Driver Phone Number (Required)
+    - Assigned Route (Selectable)
+    - College Destination (Defaults to configured college)
+    - Campus group is NOT required.
+    """
     data = request.get_json(silent=True) or {}
     raw_bus_id = data.get("bus_id") or data.get("bus_number") or ""
-    bus_id = raw_bus_id.strip()
-    bus_number = (data.get("bus_number") or bus_id).strip()
-    bus_name = (data.get("bus_name") or f"College Bus {bus_number}").strip()
-    device_id = (data.get("device_id") or bus_id).strip().lower()
+    bus_id = str(raw_bus_id).strip().upper()
+    bus_number = str(data.get("bus_number") or bus_id).strip().upper()
+    bus_name = str(data.get("bus_name") or f"Bus {bus_id}").strip()
+    device_id = str(data.get("device_id") or bus_id).strip().upper()
+    driver_name = str(data.get("driver_name") or "Unassigned").strip()
+    driver_phone = str(data.get("driver_phone") or "N/A").strip()
+    route_id = str(data.get("route_id") or "AUTOROUTE-01").strip()
+    route_name = data.get("route_name")
 
-    if not bus_id or not bus_number:
-        return jsonify({"status": "error", "message": "Bus ID and Bus Number are required"}), 400
+    if not bus_id:
+        return jsonify({"status": "error", "message": "Bus ID is required"}), 400
+    if not bus_number:
+        return jsonify({"status": "error", "message": "License Number is required"}), 400
+    if not bus_name:
+        return jsonify({"status": "error", "message": "Bus Name is required"}), 400
+    if not device_id:
+        return jsonify({"status": "error", "message": "ESP Device ID is required"}), 400
 
-    existing = Bus.find_by_id(bus_id) or Bus.find_by_device_id(device_id)
-    if existing:
-        return jsonify({"status": "error", "message": f"A bus with ID '{bus_id}' or Device ID '{device_id}' already exists"}), 409
+    existing_bus = Bus.find_by_id(bus_id)
+    if existing_bus:
+        return jsonify({"status": "error", "message": f"A bus with ID '{bus_id}' already exists"}), 409
+
+    # Prevent duplicate device mapping: check if device is assigned to another bus
+    dev = db_instance.get_device(device_id)
+    if dev and dev.get("assigned_bus_id") and dev.get("assigned_bus_id").upper() != bus_id:
+        return jsonify({
+            "status": "error",
+            "message": f"Hardware Device ID '{device_id}' is already assigned to bus '{dev.get('assigned_bus_id')}'"
+        }), 409
+
+    # Resolve Route Name
+    if not route_name:
+        route_obj = db_instance.get_route(route_id)
+        route_name = route_obj.get("route_name") if route_obj else f"Route {route_id}"
+
+    # College Destination
+    college = db_instance.get_college_config()
+    college_dest = data.get("college_destination") or college.get("college_name")
 
     new_bus = Bus(
         bus_id=bus_id,
         bus_name=bus_name,
         bus_number=bus_number,
         device_id=device_id,
-        route_id=data.get("route_id") or "ROUTE-01",
-        route_name=data.get("route_name") or f"Auto-Route {bus_id}",
-        driver_name=data.get("driver_name") or "Unassigned",
-        driver_phone=data.get("driver_phone") or "N/A",
+        route_id=route_id,
+        route_name=route_name,
+        driver_name=driver_name,
+        driver_phone=driver_phone,
         capacity=int(data.get("capacity") or 50),
-        campus=data.get("campus") or "Sphoorthy Campus Lead",
+        campus=college_dest,
         is_active=True
     )
     saved = new_bus.save()
 
+    # Automatically map device to bus in devices.json
+    if dev:
+        db_instance.assign_device_to_bus(device_id, bus_id)
+    else:
+        # Register new universal tracker and assign to this bus
+        db_instance.auto_discover_device(
+            device_id=device_id,
+            device_name=f"{bus_name} Tracker",
+            device_type=data.get("device_type", "ESP8266")
+        )
+        db_instance.assign_device_to_bus(device_id, bus_id)
+
+    # Record Audit Log
+    current_username = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=current_username,
+        role="ADMIN",
+        action="BUS_REGISTER",
+        target_type="BUS",
+        target_id=bus_id,
+        details=f"Registered bus {bus_name} ({bus_number}) mapped to ESP device {device_id} on route {route_name}",
+        ip_address=request.remote_addr
+    )
+
     return jsonify({
         "status": "success",
-        "message": f"Bus {saved.bus_name} registered successfully",
+        "message": f"Bus {saved.bus_name} registered successfully and mapped to device {device_id}",
         "bus": saved.to_dict()
     }), 201
 
@@ -1604,65 +1740,632 @@ def export_reports_csv():
 
 
 # -----------------------------------------------------------------------------
-# ADMIN AUTH & BUS MANAGEMENT CRUD
+# AUTHENTICATION & SESSION MANAGEMENT
 # -----------------------------------------------------------------------------
+@api_bp.route("/auth/login", methods=["POST"])
 @api_bp.route("/admin/login", methods=["POST"])
-def admin_login():
-    """Admin login endpoint."""
+def auth_login():
+    """
+    Authenticate user against users.json with brute-force lockout protection.
+    Accepts: {username, password}
+    """
     data = request.get_json(silent=True) or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", "")).strip()
+    client_ip = request.remote_addr or "127.0.0.1"
 
-    expected_user = current_app.config.get("ADMIN_USERNAME", "admin")
-    expected_pass = current_app.config.get("ADMIN_PASSWORD", "adminpass")
+    if not username or not password:
+        return jsonify({"status": "error", "message": "Username and password are required"}), 400
 
-    if username == expected_user and password == expected_pass:
-        session["is_admin"] = True
-        return jsonify({
-            "status": "success",
-            "message": "Admin login successful",
-            "username": username
-        }), 200
+    success, user_info, message = db_instance.authenticate_user(username, password, client_ip=client_ip)
+    if not success:
+        return jsonify({"status": "error", "message": message}), 401
 
-    return jsonify({"status": "error", "message": "Invalid username or password"}), 401
+    session["user"] = user_info
+    session["is_admin"] = (user_info.get("role") == "ADMIN")
+
+    db_instance.record_audit_log(
+        username=user_info["username"],
+        role=user_info["role"],
+        action="USER_LOGIN",
+        target_type="SESSION",
+        target_id=user_info["username"],
+        details="User successfully authenticated",
+        ip_address=client_ip
+    )
+
+    return jsonify({
+        "status": "success",
+        "message": "Login successful",
+        "user": user_info
+    }), 200
 
 
+@api_bp.route("/auth/logout", methods=["POST"])
 @api_bp.route("/admin/logout", methods=["POST"])
-def admin_logout():
-    """Admin logout endpoint."""
+def auth_logout():
+    """Clear session and record logout in audit logs."""
+    user = session.get("user") or {}
+    username = user.get("username") or "anonymous"
+    role = user.get("role") or "VIEWER"
+
+    db_instance.record_audit_log(
+        username=username,
+        role=role,
+        action="USER_LOGOUT",
+        target_type="SESSION",
+        target_id=username,
+        details="User logged out",
+        ip_address=request.remote_addr
+    )
+
+    session.pop("user", None)
     session.pop("is_admin", None)
     return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
 
+@api_bp.route("/auth/session", methods=["GET"])
+def auth_session():
+    """Get current active session user and role."""
+    user = session.get("user")
+    if user:
+        return jsonify({
+            "status": "success",
+            "authenticated": True,
+            "user": user
+        }), 200
+
+    # Fallback to anonymous viewer if not authenticated
+    return jsonify({
+        "status": "success",
+        "authenticated": False,
+        "user": {
+            "username": "viewer",
+            "role": "VIEWER",
+            "full_name": "Fleet Dispatch Viewer",
+            "is_guest": True
+        }
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# CENTRALIZED ADMIN DASHBOARD & STORAGE METRICS
+# -----------------------------------------------------------------------------
+@api_bp.route("/admin/dashboard", methods=["GET"])
+def get_admin_dashboard():
+    """
+    Centralized admin overview metric aggregator:
+    - Total registered buses (25-30+)
+    - Active buses / Inactive buses
+    - Currently running buses
+    - Buses that have reached college
+    - Offline ESP devices
+    - Storage consumption against 300 MB limit
+    - Today's completed trips
+    """
+    settings = db_instance.get_settings()
+    threshold = int(settings.get("online_threshold_seconds", 30))
+    all_buses = Bus.get_all(active_only=False)
+    all_buses_dict = [b.to_dict(online_threshold_seconds=threshold) for b in all_buses]
+
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%d-%m-%Y")
+
+    total_buses = len(all_buses_dict)
+    active_buses = sum(1 for b in all_buses_dict if b.get("is_online"))
+    inactive_buses = total_buses - active_buses
+
+    reached_college_buses = 0
+    running_buses = 0
+    for b in all_buses_dict:
+        loc = b.get("current_location") or {}
+        is_reached = bool(loc.get("is_at_college") or loc.get("status") == "REACHED_COLLEGE")
+        if is_reached:
+            reached_college_buses += 1
+        elif b.get("is_moving") or (b.get("is_online") and not is_reached):
+            running_buses += 1
+
+    devices_list = db_instance.get_all_devices(compute_status=True)
+    total_devices = len(devices_list)
+    online_devices = sum(1 for d in devices_list if d.get("is_online"))
+    offline_devices = total_devices - online_devices
+    unassigned_devices = sum(1 for d in devices_list if not d.get("assigned_bus_id"))
+
+    all_routes = db_instance.get_all_routes()
+    today_trips = db_instance.get_all_trips(date_filter=today_str)
+    completed_trips_today = sum(1 for t in today_trips if t.get("status") == "COMPLETED")
+    running_trips_today = sum(1 for t in today_trips if t.get("status") == "RUNNING")
+
+    # Precise 300 MB storage metrics
+    storage_metrics = db_instance.get_storage_metrics()
+
+    return jsonify({
+        "status": "success",
+        "dashboard": {
+            "total_buses": total_buses,
+            "active_buses": active_buses,
+            "inactive_buses": inactive_buses,
+            "running_buses": running_buses,
+            "reached_college_buses": reached_college_buses,
+            "total_devices": total_devices,
+            "online_devices": online_devices,
+            "offline_devices": offline_devices,
+            "unassigned_devices": unassigned_devices,
+            "total_routes": len(all_routes),
+            "completed_trips_today": completed_trips_today,
+            "running_trips_today": running_trips_today,
+            "storage": storage_metrics,
+            "timestamp": now.isoformat()
+        }
+    }), 200
+
+
+@api_bp.route("/admin/storage", methods=["GET"])
+def get_storage():
+    """Retrieve detailed storage utilization metrics against 300 MB hard limit."""
+    metrics = db_instance.get_storage_metrics()
+    return jsonify({
+        "status": "success",
+        "storage": metrics
+    }), 200
+
+
+@api_bp.route("/admin/storage/cleanup", methods=["POST"])
+@admin_required
+def cleanup_storage():
+    """Trigger manual rolling 7-day data retention cleanup and backup creation."""
+    res = db_instance.enforce_seven_day_retention_and_backup(force=True)
+    username = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=username,
+        role="ADMIN",
+        action="STORAGE_CLEANUP",
+        target_type="STORAGE",
+        target_id="300MB_ALLOCATION",
+        details=f"Manual storage cleanup triggered. Pruned records: {res.get('pruned_history_records')}",
+        ip_address=request.remote_addr
+    )
+    return jsonify({
+        "status": "success",
+        "message": "Storage cleanup executed successfully",
+        "result": res,
+        "storage": db_instance.get_storage_metrics()
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# USER MANAGEMENT & AUDIT LOGS (RBAC)
+# -----------------------------------------------------------------------------
+@api_bp.route("/admin/users", methods=["GET"])
+@admin_required
+def get_users():
+    """List all registered system users."""
+    users = db_instance.get_all_users()
+    return jsonify({
+        "status": "success",
+        "count": len(users),
+        "users": users
+    }), 200
+
+
+@api_bp.route("/admin/users", methods=["POST"])
+@admin_required
+def create_user_route():
+    """Register a new authorized user with role ADMIN or VIEWER."""
+    data = request.get_json(silent=True) or {}
+    try:
+        new_u = db_instance.create_user(data)
+        admin_user = session.get("user", {}).get("username") or "admin"
+        db_instance.record_audit_log(
+            username=admin_user,
+            role="ADMIN",
+            action="USER_CREATE",
+            target_type="USER",
+            target_id=new_u["username"],
+            details=f"Created user {new_u['username']} with role {new_u['role']}",
+            ip_address=request.remote_addr
+        )
+        return jsonify({
+            "status": "success",
+            "message": f"User {new_u['username']} created successfully",
+            "user": new_u
+        }), 201
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@api_bp.route("/admin/users/<username>/password", methods=["PUT"])
+@admin_required
+def update_user_password_route(username):
+    """Update password for an authorized user."""
+    data = request.get_json(silent=True) or {}
+    new_password = str(data.get("new_password", "")).strip()
+    old_password = str(data.get("old_password", "")).strip()
+
+    admin_user = session.get("user", {}).get("username") or "admin"
+    is_admin_override = (admin_user == "admin" or session.get("is_admin")) and (admin_user != username)
+
+    try:
+        db_instance.update_user_password(
+            username=username,
+            old_password=old_password,
+            new_password=new_password,
+            is_admin_override=is_admin_override
+        )
+        db_instance.record_audit_log(
+            username=admin_user,
+            role="ADMIN",
+            action="PASSWORD_CHANGE",
+            target_type="USER",
+            target_id=username,
+            details=f"Password updated for user {username}",
+            ip_address=request.remote_addr
+        )
+        return jsonify({
+            "status": "success",
+            "message": f"Password for {username} updated successfully"
+        }), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@api_bp.route("/admin/users/<username>", methods=["DELETE"])
+@admin_required
+def delete_user_route(username):
+    """Delete an authorized user."""
+    try:
+        success = db_instance.delete_user(username)
+        if not success:
+            return jsonify({"status": "error", "message": f"User '{username}' not found"}), 404
+
+        admin_user = session.get("user", {}).get("username") or "admin"
+        db_instance.record_audit_log(
+            username=admin_user,
+            role="ADMIN",
+            action="USER_DELETE",
+            target_type="USER",
+            target_id=username,
+            details=f"Deleted user {username}",
+            ip_address=request.remote_addr
+        )
+        return jsonify({"status": "success", "message": f"User '{username}' deleted successfully"}), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@api_bp.route("/admin/audit-logs", methods=["GET"])
+@admin_required
+def get_audit_logs_route():
+    """Retrieve security audit logs."""
+    limit = int(request.args.get("limit", 100))
+    action = request.args.get("action")
+    logs = db_instance.get_audit_logs(limit=limit, action=action)
+    return jsonify({
+        "status": "success",
+        "count": len(logs),
+        "audit_logs": logs
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# COLLEGE DESTINATION & GEOFENCING CONFIGURATION
+# -----------------------------------------------------------------------------
+@api_bp.route("/college", methods=["GET"])
+def get_college_route():
+    """Retrieve configured college destination and geofence parameters."""
+    config = db_instance.get_college_config()
+    return jsonify({
+        "status": "success",
+        "college": config
+    }), 200
+
+
+@api_bp.route("/college", methods=["PUT", "POST"])
+@admin_required
+def update_college_route():
+    """Update configured college destination and geofence radius."""
+    data = request.get_json(silent=True) or {}
+    updated = db_instance.update_college_config(data)
+
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="COLLEGE_CONFIG_UPDATE",
+        target_type="SETTINGS",
+        target_id=updated.get("college_name"),
+        details=f"Updated college coordinates to ({updated['college_latitude']}, {updated['college_longitude']}) radius {updated['college_geofence_radius_meters']}m",
+        ip_address=request.remote_addr
+    )
+
+    return jsonify({
+        "status": "success",
+        "message": "College configuration updated successfully",
+        "college": updated
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# ROUTE MANAGEMENT & GEOCODING
+# -----------------------------------------------------------------------------
+@api_bp.route("/routes", methods=["GET"])
+def get_routes_route():
+    """List all registered transit routes."""
+    routes = db_instance.get_all_routes()
+    return jsonify({
+        "status": "success",
+        "count": len(routes),
+        "routes": routes
+    }), 200
+
+
+@api_bp.route("/routes/<route_id>", methods=["GET"])
+def get_route_route(route_id):
+    """Get single transit route details."""
+    route = db_instance.get_route(route_id)
+    if not route:
+        return jsonify({"status": "error", "message": f"Route '{route_id}' not found"}), 404
+    return jsonify({
+        "status": "success",
+        "route": route
+    }), 200
+
+
+@api_bp.route("/routes", methods=["POST"])
+@admin_required
+def create_route_route():
+    """Create a new bus transit route."""
+    data = request.get_json(silent=True) or {}
+    route_name = data.get("route_name")
+    if not route_name:
+        return jsonify({"status": "error", "message": "Route Name is required"}), 400
+
+    new_r = db_instance.create_route(data)
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="ROUTE_CREATE",
+        target_type="ROUTE",
+        target_id=new_r["id"],
+        details=f"Created route {new_r['route_name']} ({new_r.get('origin')} -> {new_r.get('destination')})",
+        ip_address=request.remote_addr
+    )
+    return jsonify({
+        "status": "success",
+        "message": f"Route '{new_r['route_name']}' created successfully",
+        "route": new_r
+    }), 201
+
+
+@api_bp.route("/routes/<route_id>", methods=["PUT"])
+@admin_required
+def update_route_route(route_id):
+    """Update an existing transit route."""
+    data = request.get_json(silent=True) or {}
+    updated = db_instance.update_route(route_id, data)
+    if not updated:
+        return jsonify({"status": "error", "message": f"Route '{route_id}' not found"}), 404
+
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="ROUTE_UPDATE",
+        target_type="ROUTE",
+        target_id=route_id,
+        details=f"Updated route {route_id}",
+        ip_address=request.remote_addr
+    )
+    return jsonify({
+        "status": "success",
+        "message": f"Route '{route_id}' updated successfully",
+        "route": updated
+    }), 200
+
+
+@api_bp.route("/routes/<route_id>", methods=["DELETE"])
+@admin_required
+def delete_route_route(route_id):
+    """Delete a transit route."""
+    success = db_instance.delete_route(route_id)
+    if not success:
+        return jsonify({"status": "error", "message": f"Route '{route_id}' not found"}), 404
+
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="ROUTE_DELETE",
+        target_type="ROUTE",
+        target_id=route_id,
+        details=f"Deleted route {route_id}",
+        ip_address=request.remote_addr
+    )
+    return jsonify({
+        "status": "success",
+        "message": f"Route '{route_id}' deleted successfully"
+    }), 200
+
+
+@api_bp.route("/routes/geocode", methods=["GET"])
+def geocode_route_location():
+    """
+    Automatic location detection and geocoding endpoint:
+    Searches location name and retrieves latitude and longitude suggestions.
+    Fast instant offline local landmark dictionary with fallback to Nominatim.
+    """
+    query = request.args.get("q", "").strip()
+    if not query or len(query) < 2:
+        return jsonify({"status": "error", "message": "Query parameter 'q' is required"}), 400
+
+    q_lower = query.lower()
+    matches = []
+
+    # 1. Match local high-accuracy landmarks
+    for lm in LOCAL_LANDMARKS:
+        if q_lower in lm["name"].lower() or q_lower in lm["display_name"].lower():
+            matches.append({
+                "name": lm["name"],
+                "display_name": lm["display_name"],
+                "latitude": lm["latitude"],
+                "longitude": lm["longitude"],
+                "source": "local_transit_directory"
+            })
+
+    # 2. If fewer than 4 matches, attempt online Nominatim geocoding with timeout
+    if len(matches) < 4:
+        try:
+            encoded_q = urllib.parse.quote(f"{query}, Hyderabad, India")
+            url = f"https://nominatim.openstreetmap.org/search?q={encoded_q}&format=json&limit=4"
+            req = urllib.request.Request(url, headers={"User-Agent": "SmartBusTrackingSystem/3.2 (contact@sphoorthy.ac.in)"})
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                data = json.loads(resp.read().decode())
+                for item in data:
+                    matches.append({
+                        "name": item.get("name") or query.title(),
+                        "display_name": item.get("display_name"),
+                        "latitude": round(float(item["lat"]), 6),
+                        "longitude": round(float(item["lon"]), 6),
+                        "source": "nominatim_osm"
+                    })
+        except Exception:
+            pass
+
+    # If still empty, provide synthesized best-guess near Hyderabad city center
+    if not matches:
+        matches.append({
+            "name": query.title(),
+            "display_name": f"{query.title()}, Greater Hyderabad Area, Telangana",
+            "latitude": 17.3850,
+            "longitude": 78.4867,
+            "source": "estimated_city_centroid"
+        })
+
+    return jsonify({
+        "status": "success",
+        "query": query,
+        "count": len(matches),
+        "suggestions": matches
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# DISTANCE METRICS & DAILY TRIPS
+# -----------------------------------------------------------------------------
+@api_bp.route("/buses/<bus_id>/distances", methods=["GET"])
+def get_bus_distances(bus_id):
+    """
+    Returns 3 distinct distance calculations:
+    A. Trip Distance: distance in km for the current trip.
+    B. Daily Distance: sum of distances of all trips today.
+    C. Seven-Day Distance History: daily km breakdown for the latest seven days.
+    """
+    bus = Bus.find_by_id(bus_id) or Bus.find_by_device_id(bus_id)
+    if not bus:
+        return jsonify({"status": "error", "message": f"Bus '{bus_id}' not found"}), 404
+
+    metrics = db_instance.get_bus_distance_metrics(bus.bus_id)
+    return jsonify({
+        "status": "success",
+        "bus_id": bus.bus_id,
+        "bus_name": bus.bus_name,
+        "distance_metrics": metrics
+    }), 200
+
+
+@api_bp.route("/buses/<bus_id>/trips", methods=["GET"])
+def get_bus_trips_route(bus_id):
+    """Retrieve daily trips for a bus (supports approx 2-4 trips per day)."""
+    bus = Bus.find_by_id(bus_id) or Bus.find_by_device_id(bus_id)
+    if not bus:
+        return jsonify({"status": "error", "message": f"Bus '{bus_id}' not found"}), 404
+
+    date_filter = request.args.get("date")
+    trips = db_instance.get_bus_trips(bus.bus_id, date_filter=date_filter)
+    return jsonify({
+        "status": "success",
+        "bus_id": bus.bus_id,
+        "count": len(trips),
+        "trips": trips
+    }), 200
+
+
+@api_bp.route("/trips", methods=["GET"])
+def get_all_trips_route():
+    """Retrieve all daily trips across fleet."""
+    date_filter = request.args.get("date")
+    trips = db_instance.get_all_trips(date_filter=date_filter)
+    return jsonify({
+        "status": "success",
+        "count": len(trips),
+        "trips": trips
+    }), 200
+
+
+# -----------------------------------------------------------------------------
+# ADMIN BUS MANAGEMENT CRUD
+# -----------------------------------------------------------------------------
 @api_bp.route("/admin/buses", methods=["POST"])
+@admin_required
 def create_bus_admin():
     """Create a new bus in JSON database."""
     return register_bus()
 
 
 @api_bp.route("/admin/buses/<bus_id>", methods=["PUT"])
+@admin_required
 def update_bus_admin(bus_id):
     """Update bus details in JSON database."""
     bus = Bus.find_by_id(bus_id) or Bus.find_by_device_id(bus_id)
     if not bus:
-        return jsonify({"status": "error", "message": f"Bus {bus_id} not found"}), 404
+        return jsonify({"status": "error", "message": f"Bus '{bus_id}' not found"}), 404
 
     data = request.get_json(silent=True) or {}
     updated = db_instance.update_bus(bus.bus_id, data)
 
+    # Re-associate device if device_id changed
+    if data.get("device_id"):
+        db_instance.assign_device_to_bus(data["device_id"], bus.bus_id)
+
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="BUS_UPDATE",
+        target_type="BUS",
+        target_id=bus.bus_id,
+        details=f"Updated details for bus {bus.bus_id}",
+        ip_address=request.remote_addr
+    )
+
     return jsonify({
         "status": "success",
-        "message": f"Bus {bus_id} updated successfully",
+        "message": f"Bus '{bus_id}' updated successfully",
         "bus": Bus(**updated).to_dict() if updated else bus.to_dict()
     }), 200
 
 
 @api_bp.route("/admin/buses/<bus_id>", methods=["DELETE"])
+@admin_required
 def delete_bus_admin(bus_id):
     """Delete a bus from JSON database."""
     bus = Bus.find_by_id(bus_id) or Bus.find_by_device_id(bus_id)
     if not bus:
-        return jsonify({"status": "error", "message": f"Bus {bus_id} not found"}), 404
+        return jsonify({"status": "error", "message": f"Bus '{bus_id}' not found"}), 404
 
     success = db_instance.delete_bus(bus.bus_id)
-    return jsonify({"status": "success", "message": f"Bus {bus.bus_id} deleted successfully"}), 200
+    admin_user = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=admin_user,
+        role="ADMIN",
+        action="BUS_DELETE",
+        target_type="BUS",
+        target_id=bus.bus_id,
+        details=f"Deleted bus {bus.bus_id} ({bus.bus_name})",
+        ip_address=request.remote_addr
+    )
+    return jsonify({
+        "status": "success",
+        "message": f"Bus '{bus.bus_id}' deleted successfully"
+    }), 200

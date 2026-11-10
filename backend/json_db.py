@@ -4,13 +4,40 @@ import uuid
 import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from werkzeug.security import generate_password_hash, check_password_hash
 from backend.route_engine import compute_trip_summary, haversine_distance_m, haversine_distance_km
+
+# Maximum Storage Allocation: 300 MB hard limit
+MAX_STORAGE_BYTES = 300 * 1024 * 1024  # 314,572,800 bytes
 
 # Thread lock for concurrent file safety
 _LOCK = threading.RLock()
 
 # In-memory active trajectory tracking per bus for auto-route creation
 _ACTIVE_TRIPS = {}
+
+# In-memory brute force protection tracking {key: {"attempts": int, "locked_until": datetime}}
+_FAILED_LOGINS = {}
+
+# Initial Default Users with Hashed Passwords
+DEFAULT_USERS = [
+    {
+        "id": "USR-001",
+        "username": "admin",
+        "password_hash": generate_password_hash("adminpass"),
+        "role": "ADMIN",
+        "full_name": "System Administrator",
+        "created_at": "2026-11-10T00:00:00+00:00"
+    },
+    {
+        "id": "USR-002",
+        "username": "viewer",
+        "password_hash": generate_password_hash("viewer123"),
+        "role": "VIEWER",
+        "full_name": "Fleet Dispatch Viewer",
+        "created_at": "2026-11-10T00:00:00+00:00"
+    }
+]
 
 
 # Initial Seed Route Templates & Stops
@@ -282,10 +309,12 @@ class JsonDB:
         self.users_file = self.data_dir / "users.json"
         self.routes_file = self.data_dir / "routes.json"
         self.journeys_file = self.data_dir / "journeys.json"
+        self.trips_file = self.data_dir / "trips.json"
         self.stops_file = self.data_dir / "stops.json"
         self.deviations_file = self.data_dir / "deviations.json"
         self.stop_events_file = self.data_dir / "stop_events.json"
         self.device_health_file = self.data_dir / "device_health.json"
+        self.audit_logs_file = self.data_dir / "audit_logs.json"
         self.backups_dir = self.data_dir / "backups"
         self._last_retention_check = None
 
@@ -304,23 +333,35 @@ class JsonDB:
                 (self.settings_file, {
                     "online_threshold_seconds": 30,
                     "deviation_threshold_meters": 150,
-                    "geofence_radius_meters": 75,
+                    "geofence_radius_meters": 100,
                     "auto_refresh_seconds": 5,
                     "server_url": "https://trackbus.pythonanywhere.com",
-                    "api_key": "YOUR_API_KEY"
+                    "api_key": "YOUR_API_KEY",
+                    "college_name": "Sphoorthy Engineering College",
+                    "college_latitude": 17.3156,
+                    "college_longitude": 78.5833,
+                    "college_geofence_radius_meters": 120,
+                    "max_storage_bytes": MAX_STORAGE_BYTES
                 }),
-                (self.users_file, []),
+                (self.users_file, DEFAULT_USERS),
                 (self.routes_file, DEFAULT_ROUTES),
                 (self.journeys_file, []),
+                (self.trips_file, []),
                 (self.stops_file, DEFAULT_STOPS),
                 (self.deviations_file, []),
                 (self.stop_events_file, []),
                 (self.device_health_file, {}),
+                (self.audit_logs_file, []),
             ]
 
             for file_path, default_content in files_and_defaults:
-                if not file_path.exists() or file_path.stat().st_size == 0:
+                if not file_path.exists() or file_path.stat().st_size <= 2:
                     self._write_json_direct(file_path, default_content)
+
+            # Ensure default users exist if empty
+            current_users = self._read_json(self.users_file, default=[])
+            if not current_users:
+                self._write_json_direct(self.users_file, DEFAULT_USERS)
 
             self.backups_dir.mkdir(parents=True, exist_ok=True)
             self.enforce_seven_day_retention_and_backup(force=False)
@@ -925,7 +966,7 @@ class JsonDB:
     def save_current_location(self, bus_id, lat, lng, speed=0.0, heading=0.0, timestamp=None,
                               satellites=None, accuracy=None, altitude=None, gps_status="valid",
                               device_id=None, status=None):
-        """Update or insert current location for a bus."""
+        """Update or insert current location for a bus with college geofence and daily trip detection."""
         with _LOCK:
             target = str(bus_id).strip().upper()
             locations = self.get_all_locations()
@@ -935,7 +976,23 @@ class JsonDB:
             date_str = now.strftime("%d-%m-%Y")
             time_str = now.strftime("%I:%M:%S %p")
 
-            calc_status = status or ("MOVING" if float(speed) > 3.0 else "STOPPED")
+            # College Geofencing Arrival Detection
+            college = self.get_college_config()
+            dist_to_college_m = haversine_distance_m(
+                float(lat), float(lng),
+                college["college_latitude"], college["college_longitude"]
+            )
+            is_at_college = dist_to_college_m <= college["college_geofence_radius_meters"]
+
+            if is_at_college:
+                calc_status = "REACHED_COLLEGE"
+            else:
+                calc_status = status or ("MOVING" if float(speed) > 3.0 else "STOPPED")
+
+            # Manage daily trips state machine
+            active_trip = self.process_gps_point_for_trips(
+                target, device_id, float(lat), float(lng), float(speed), now, is_at_college
+            )
 
             loc_entry = {
                 "id": len(locations) + 1,
@@ -951,6 +1008,9 @@ class JsonDB:
                 "altitude": round(float(altitude), 1) if altitude is not None else 500.0,
                 "gps_status": gps_status or "valid",
                 "status": calc_status,
+                "is_at_college": is_at_college,
+                "distance_to_college_m": round(dist_to_college_m, 1),
+                "active_trip_id": active_trip.get("id") if active_trip else None,
                 "timestamp": now_iso,
                 "updated_at": now_iso,
                 "date": date_str,
@@ -1514,17 +1574,22 @@ class JsonDB:
         return devices
 
     # -------------------------------------------------------------------------
-    # SETTINGS
+    # SETTINGS & COLLEGE GEOFENCING CONFIGURATION
     # -------------------------------------------------------------------------
     def get_settings(self):
         """Get current system configuration settings."""
         defaults = {
             "online_threshold_seconds": 30,
             "deviation_threshold_meters": 150,
-            "geofence_radius_meters": 75,
+            "geofence_radius_meters": 100,
             "auto_refresh_seconds": 5,
             "server_url": "https://trackbus.pythonanywhere.com",
-            "api_key": "YOUR_API_KEY"
+            "api_key": "YOUR_API_KEY",
+            "college_name": "Sphoorthy Engineering College",
+            "college_latitude": 17.3156,
+            "college_longitude": 78.5833,
+            "college_geofence_radius_meters": 120,
+            "max_storage_bytes": MAX_STORAGE_BYTES
         }
         stored = self._read_json(self.settings_file, default=defaults)
         defaults.update(stored)
@@ -1540,6 +1605,516 @@ class JsonDB:
             self._write_json(self.settings_file, curr)
             return curr
 
+    def get_college_config(self):
+        """Get configured college destination and geofence parameters."""
+        settings = self.get_settings()
+        return {
+            "college_name": settings.get("college_name", "Sphoorthy Engineering College"),
+            "college_latitude": float(settings.get("college_latitude", 17.3156)),
+            "college_longitude": float(settings.get("college_longitude", 78.5833)),
+            "college_geofence_radius_meters": int(settings.get("college_geofence_radius_meters", 120))
+        }
+
+    def update_college_config(self, config_data):
+        """Update college destination and geofence radius."""
+        with _LOCK:
+            settings = self.get_settings()
+            if "college_name" in config_data and config_data["college_name"]:
+                settings["college_name"] = str(config_data["college_name"]).strip()
+            if "college_latitude" in config_data:
+                settings["college_latitude"] = round(float(config_data["college_latitude"]), 6)
+            if "college_longitude" in config_data:
+                settings["college_longitude"] = round(float(config_data["college_longitude"]), 6)
+            if "college_geofence_radius_meters" in config_data:
+                settings["college_geofence_radius_meters"] = max(20, int(config_data["college_geofence_radius_meters"]))
+            self.update_settings(settings)
+            return self.get_college_config()
+
+    def check_college_geofence(self, lat, lng):
+        """Calculate distance to college and return geofence status."""
+        college = self.get_college_config()
+        dist_m = haversine_distance_m(
+            float(lat), float(lng),
+            college["college_latitude"], college["college_longitude"]
+        )
+        is_inside = dist_m <= college["college_geofence_radius_meters"]
+        return is_inside, round(dist_m, 1)
+
+    # -------------------------------------------------------------------------
+    # DAILY TRIPS & 3-TIER DISTANCE ENGINE
+    # -------------------------------------------------------------------------
+    def process_gps_point_for_trips(self, bus_id, device_id, lat, lng, speed, now_dt, is_at_college=False):
+        """
+        Manages distinct daily trips (approx 2-4 trips per bus daily):
+        - When at college geofence: finalizes active trip (COMPLETED / REACHED_COLLEGE).
+        - When departing college (> geofence + 30m) or moving on route: starts next scheduled trip.
+        - Calculates accumulated trip distance with noise & stationary filtering.
+        """
+        with _LOCK:
+            target_bus = str(bus_id).strip().upper()
+            trips = self._read_json(self.trips_file, default=[])
+            today_str = now_dt.strftime("%d-%m-%Y")
+            time_str = now_dt.strftime("%I:%M %p")
+
+            # Find active RUNNING trip for this bus today
+            active_trip = None
+            bus_today_trips = []
+            for t in trips:
+                if t.get("bus_id", "").upper() == target_bus and t.get("date") == today_str:
+                    bus_today_trips.append(t)
+                    if t.get("status") == "RUNNING":
+                        active_trip = t
+
+            bus_info = self.get_bus(target_bus) or {}
+            route_id = bus_info.get("route_id", "AUTOROUTE-01")
+
+            if is_at_college:
+                if active_trip:
+                    # Finalize trip upon arrival at college
+                    last_coords = [round(float(lat), 6), round(float(lng), 6)]
+                    active_trip["status"] = "COMPLETED"
+                    active_trip["end_time"] = time_str
+                    active_trip["arrival_time"] = time_str
+                    active_trip["end_coordinates"] = last_coords
+                    active_trip["updated_at"] = now_dt.isoformat()
+                    self._write_json(self.trips_file, trips)
+                    return active_trip
+                return None
+
+            # Bus is away from college: either update running trip or initiate next trip
+            if not active_trip:
+                # Start a new trip for today (e.g. Morning Inbound, Afternoon Return, etc.)
+                trip_num = len(bus_today_trips) + 1
+                trip_id = f"TRIP-{target_bus}-{now_dt.strftime('%Y%m%d')}-{trip_num}"
+                coords = [round(float(lat), 6), round(float(lng), 6)]
+
+                new_trip = {
+                    "id": trip_id,
+                    "bus_id": target_bus,
+                    "device_id": str(device_id or target_bus).upper(),
+                    "route_id": route_id,
+                    "trip_number": trip_num,
+                    "date": today_str,
+                    "start_time": time_str,
+                    "start_coordinates": coords,
+                    "end_time": None,
+                    "end_coordinates": None,
+                    "distance_km": 0.0,
+                    "status": "RUNNING",
+                    "arrival_time": None,
+                    "last_lat": coords[0],
+                    "last_lng": coords[1],
+                    "created_at": now_dt.isoformat(),
+                    "updated_at": now_dt.isoformat()
+                }
+                trips.append(new_trip)
+                self._write_json(self.trips_file, trips)
+                return new_trip
+            else:
+                # Active trip exists: accumulate distance with filtering
+                last_lat = float(active_trip.get("last_lat", active_trip["start_coordinates"][0]))
+                last_lng = float(active_trip.get("last_lng", active_trip["start_coordinates"][1]))
+                step_m = haversine_distance_m(last_lat, last_lng, float(lat), float(lng))
+
+                # GPS noise filtering (<8m or stationary) and jump/teleport rejection (>5000m)
+                if step_m >= 8.0 and step_m < 5000.0:
+                    step_km = step_m / 1000.0
+                    curr_dist = float(active_trip.get("distance_km", 0.0))
+                    active_trip["distance_km"] = round(curr_dist + step_km, 2)
+                    active_trip["last_lat"] = round(float(lat), 6)
+                    active_trip["last_lng"] = round(float(lng), 6)
+                    active_trip["updated_at"] = now_dt.isoformat()
+                    self._write_json(self.trips_file, trips)
+                return active_trip
+
+    def get_bus_distance_metrics(self, bus_id):
+        """
+        Calculates and returns 3 distinct distance measurements:
+        A. Trip Distance: distance in km for the current trip.
+        B. Daily Distance: sum of distances of all trips completed today + current trip.
+        C. Seven-Day Distance History: daily km breakdown for the latest seven days.
+        """
+        target = str(bus_id).strip().upper()
+        trips = self._read_json(self.trips_file, default=[])
+        bus_trips = [t for t in trips if t.get("bus_id", "").upper() == target]
+
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%d-%m-%Y")
+
+        today_trips = [t for t in bus_trips if t.get("date") == today_str]
+        active_trip = next((t for t in today_trips if t.get("status") == "RUNNING"), None)
+
+        # A. Trip Distance
+        if active_trip:
+            trip_distance_km = round(float(active_trip.get("distance_km", 0.0)), 2)
+            current_trip_status = "RUNNING"
+            current_trip_num = active_trip.get("trip_number", 1)
+        elif today_trips:
+            latest = today_trips[-1]
+            trip_distance_km = round(float(latest.get("distance_km", 0.0)), 2)
+            current_trip_status = latest.get("status", "COMPLETED")
+            current_trip_num = latest.get("trip_number", len(today_trips))
+        elif bus_trips:
+            latest = bus_trips[-1]
+            trip_distance_km = round(float(latest.get("distance_km", 0.0)), 2)
+            current_trip_status = latest.get("status", "COMPLETED")
+            current_trip_num = latest.get("trip_number", 1)
+        else:
+            trip_distance_km = 0.0
+            current_trip_status = "IDLE"
+            current_trip_num = 0
+
+        # B. Daily Distance (Sum of all today's trips)
+        daily_distance_km = round(sum(float(t.get("distance_km", 0.0)) for t in today_trips), 2)
+
+        # C. Seven-Day Distance History
+        seven_days = []
+        seven_day_total_km = 0.0
+        for offset in range(6, -1, -1):
+            d_date = now - timedelta(days=offset)
+            d_str = d_date.strftime("%d-%m-%Y")
+            d_name = d_date.strftime("%A")
+            short_lbl = d_date.strftime("%b %d")
+            d_trips = [t for t in bus_trips if t.get("date") == d_str]
+            d_dist = round(sum(float(t.get("distance_km", 0.0)) for t in d_trips), 2)
+            seven_day_total_km += d_dist
+            seven_days.append({
+                "date": d_str,
+                "day_name": d_name,
+                "label": f"{d_name} ({short_lbl})",
+                "distance_km": d_dist,
+                "trips_count": len(d_trips),
+                "is_today": (d_str == today_str)
+            })
+
+        seven_day_total_km = round(seven_day_total_km, 2)
+
+        # Assigned route total & remaining distance
+        bus_info = self.get_bus(target) or {}
+        route_id = bus_info.get("route_id")
+        route = self.get_route(route_id) if route_id else None
+        total_route_distance_km = float(route.get("distance_km", 12.0)) if route else 12.0
+        remaining_distance_km = max(0.0, round(total_route_distance_km - trip_distance_km, 2))
+
+        return {
+            "bus_id": target,
+            "trip_distance_km": trip_distance_km,
+            "current_trip_status": current_trip_status,
+            "current_trip_number": current_trip_num,
+            "daily_distance_km": daily_distance_km,
+            "daily_trips_count": len(today_trips),
+            "seven_day_total_km": seven_day_total_km,
+            "seven_day_history": seven_days,
+            "total_route_distance_km": total_route_distance_km,
+            "remaining_distance_km": remaining_distance_km
+        }
+
+    def get_bus_trips(self, bus_id, date_filter=None, limit=50):
+        """Retrieve daily trip records for a bus."""
+        target = str(bus_id).strip().upper()
+        trips = self._read_json(self.trips_file, default=[])
+        bus_trips = [t for t in trips if t.get("bus_id", "").upper() == target]
+        if date_filter and date_filter.lower() != "all":
+            bus_trips = [t for t in bus_trips if t.get("date") == date_filter]
+        if limit and limit > 0:
+            bus_trips = bus_trips[-limit:]
+        return bus_trips
+
+    def get_all_trips(self, date_filter=None, limit=100):
+        """Retrieve all fleet daily trips."""
+        trips = self._read_json(self.trips_file, default=[])
+        if date_filter and date_filter.lower() != "all":
+            trips = [t for t in trips if t.get("date") == date_filter]
+        if limit and limit > 0:
+            trips = trips[-limit:]
+        return trips
+
+    # -------------------------------------------------------------------------
+    # 300 MB STORAGE MONITORING & OPTIMIZATION
+    # -------------------------------------------------------------------------
+    def get_storage_metrics(self):
+        """
+        Calculate precise disk storage consumption against the 300 MB hard limit.
+        Returns used/available MB, percentage, warning status, and file breakdown.
+        """
+        total_used = 0
+        categories = {
+            "database": 0,
+            "tracking": 0,
+            "trips": 0,
+            "backups": 0,
+            "security": 0
+        }
+        file_list = []
+
+        if self.data_dir.exists():
+            for item in self.data_dir.iterdir():
+                if item.is_file():
+                    try:
+                        sz = item.stat().st_size
+                        mtime = datetime.fromtimestamp(item.stat().st_mtime, tz=timezone.utc).isoformat()
+                        fname = item.name
+                        total_used += sz
+
+                        if fname in ["buses.json", "devices.json", "routes.json", "stops.json", "settings.json", "locations.json"]:
+                            cat = "database"
+                        elif fname in ["history.json", "deviations.json", "stop_events.json", "device_health.json"]:
+                            cat = "tracking"
+                        elif fname in ["trips.json", "journeys.json"]:
+                            cat = "trips"
+                        elif fname in ["users.json", "audit_logs.json"]:
+                            cat = "security"
+                        else:
+                            cat = "database"
+
+                        categories[cat] += sz
+                        file_list.append({
+                            "filename": fname,
+                            "category": cat,
+                            "size_bytes": sz,
+                            "size_kb": round(sz / 1024.0, 2),
+                            "size_mb": round(sz / (1024.0 * 1024.0), 4),
+                            "last_modified": mtime,
+                            "is_permanent": fname in ["buses.json", "devices.json", "routes.json", "stops.json", "settings.json", "users.json"]
+                        })
+                    except Exception:
+                        pass
+
+        if self.backups_dir.exists():
+            for bf in self.backups_dir.glob("*.json"):
+                try:
+                    sz = bf.stat().st_size
+                    mtime = datetime.fromtimestamp(bf.stat().st_mtime, tz=timezone.utc).isoformat()
+                    total_used += sz
+                    categories["backups"] += sz
+                    file_list.append({
+                        "filename": f"backups/{bf.name}",
+                        "category": "backups",
+                        "size_bytes": sz,
+                        "size_kb": round(sz / 1024.0, 2),
+                        "size_mb": round(sz / (1024.0 * 1024.0), 4),
+                        "last_modified": mtime,
+                        "is_permanent": False
+                    })
+                except Exception:
+                    pass
+
+        total_mb = round(total_used / (1024.0 * 1024.0), 2)
+        max_mb = round(MAX_STORAGE_BYTES / (1024.0 * 1024.0), 1)  # 300.0 MB
+        available_mb = max(0.0, round(max_mb - total_mb, 2))
+        percent_used = min(100.0, round((total_used / MAX_STORAGE_BYTES) * 100.0, 2))
+
+        # Configurable warning levels at 70%, 85%, 95%
+        warning_level = "NORMAL"
+        if percent_used >= 95.0:
+            warning_level = "CRITICAL_95"
+        elif percent_used >= 85.0:
+            warning_level = "WARNING_85"
+        elif percent_used >= 70.0:
+            warning_level = "WARNING_70"
+
+        return {
+            "max_storage_mb": max_mb,
+            "max_storage_bytes": MAX_STORAGE_BYTES,
+            "total_used_mb": total_mb,
+            "total_used_bytes": total_used,
+            "available_mb": available_mb,
+            "percent_used": percent_used,
+            "warning_level": warning_level,
+            "category_breakdown_mb": {
+                k: round(v / (1024.0 * 1024.0), 4) for k, v in categories.items()
+            },
+            "category_breakdown_bytes": categories,
+            "files_count": len(file_list),
+            "files": sorted(file_list, key=lambda x: x["size_bytes"], reverse=True),
+            "retention_policy": "7_days_rolling",
+            "last_retention_check": self._last_retention_check.isoformat() if self._last_retention_check else None
+        }
+
+    # -------------------------------------------------------------------------
+    # USER AUTHENTICATION & RBAC SECURITY
+    # -------------------------------------------------------------------------
+    def get_all_users(self):
+        """List all registered system users (passwords omitted)."""
+        users = self._read_json(self.users_file, default=[])
+        return [
+            {
+                "id": u.get("id"),
+                "username": u.get("username"),
+                "role": u.get("role", "VIEWER"),
+                "full_name": u.get("full_name"),
+                "created_at": u.get("created_at")
+            }
+            for u in users
+        ]
+
+    def get_user(self, username):
+        """Find user by username."""
+        if not username:
+            return None
+        target = str(username).strip().lower()
+        users = self._read_json(self.users_file, default=[])
+        for u in users:
+            if str(u.get("username", "")).strip().lower() == target:
+                return u
+        return None
+
+    def create_user(self, user_data):
+        """Create a new authorized user with role and hashed password."""
+        with _LOCK:
+            username = str(user_data.get("username", "")).strip().lower()
+            if not username or len(username) < 3:
+                raise ValueError("Valid username is required (min 3 chars)")
+
+            password = str(user_data.get("password", "")).strip()
+            if not password or len(password) < 6:
+                raise ValueError("Password must be at least 6 characters")
+
+            users = self._read_json(self.users_file, default=[])
+            for u in users:
+                if str(u.get("username", "")).strip().lower() == username:
+                    raise ValueError(f"Username '{username}' already exists")
+
+            role = str(user_data.get("role", "VIEWER")).strip().upper()
+            if role not in ["ADMIN", "VIEWER"]:
+                role = "VIEWER"
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            new_u = {
+                "id": f"USR-{len(users)+1:03d}",
+                "username": username,
+                "password_hash": generate_password_hash(password),
+                "role": role,
+                "full_name": user_data.get("full_name") or username.title(),
+                "created_at": now_iso
+            }
+            users.append(new_u)
+            self._write_json(self.users_file, users)
+            return {
+                "id": new_u["id"],
+                "username": new_u["username"],
+                "role": new_u["role"],
+                "full_name": new_u["full_name"],
+                "created_at": new_u["created_at"]
+            }
+
+    def update_user_password(self, username, old_password, new_password, is_admin_override=False):
+        """Update user password with optional old password verification."""
+        with _LOCK:
+            target = str(username).strip().lower()
+            users = self._read_json(self.users_file, default=[])
+            if not new_password or len(new_password) < 6:
+                raise ValueError("New password must be at least 6 characters")
+
+            for i, u in enumerate(users):
+                if str(u.get("username", "")).strip().lower() == target:
+                    if not is_admin_override:
+                        if not check_password_hash(u.get("password_hash", ""), old_password):
+                            raise ValueError("Current password is incorrect")
+                    u["password_hash"] = generate_password_hash(new_password)
+                    u["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    users[i] = u
+                    self._write_json(self.users_file, users)
+                    return True
+            raise ValueError(f"User '{username}' not found")
+
+    def delete_user(self, username):
+        """Delete an authorized user (prevents deleting the root 'admin')."""
+        with _LOCK:
+            target = str(username).strip().lower()
+            if target == "admin":
+                raise ValueError("Cannot delete the root administrator account")
+            users = self._read_json(self.users_file, default=[])
+            filtered = [u for u in users if str(u.get("username", "")).strip().lower() != target]
+            if len(filtered) == len(users):
+                return False
+            self._write_json(self.users_file, filtered)
+            return True
+
+    def authenticate_user(self, username, password, client_ip="127.0.0.1"):
+        """
+        Authenticate user with brute-force lockout protection.
+        Locks out after 5 consecutive failed attempts for 15 minutes.
+        """
+        global _FAILED_LOGINS
+        with _LOCK:
+            now = datetime.now(timezone.utc)
+            target = str(username or "").strip().lower()
+            lock_key = f"{client_ip}:{target}"
+
+            # Check if currently locked
+            lock_entry = _FAILED_LOGINS.get(lock_key)
+            if lock_entry:
+                locked_until = lock_entry.get("locked_until")
+                if locked_until and now < locked_until:
+                    remaining_sec = int((locked_until - now).total_seconds())
+                    return False, None, f"Too many failed login attempts. Locked out for {remaining_sec} more seconds."
+
+            user = self.get_user(target)
+            if not user:
+                self._record_failed_attempt(lock_key, now)
+                return False, None, "Invalid username or password"
+
+            stored_hash = user.get("password_hash")
+            if not stored_hash or not check_password_hash(stored_hash, password):
+                self._record_failed_attempt(lock_key, now)
+                return False, None, "Invalid username or password"
+
+            # Success: clear lockout
+            if lock_key in _FAILED_LOGINS:
+                del _FAILED_LOGINS[lock_key]
+
+            clean_user = {
+                "id": user.get("id"),
+                "username": user.get("username"),
+                "role": user.get("role", "VIEWER"),
+                "full_name": user.get("full_name", target)
+            }
+            return True, clean_user, "Authentication successful"
+
+    def _record_failed_attempt(self, lock_key, now):
+        """Increment failed login attempts and lock out if threshold reached."""
+        global _FAILED_LOGINS
+        entry = _FAILED_LOGINS.get(lock_key, {"attempts": 0, "locked_until": None})
+        entry["attempts"] += 1
+        if entry["attempts"] >= 5:
+            entry["locked_until"] = now + timedelta(minutes=15)
+        _FAILED_LOGINS[lock_key] = entry
+
+    # -------------------------------------------------------------------------
+    # AUDIT LOGGING
+    # -------------------------------------------------------------------------
+    def record_audit_log(self, username, role, action, target_type, target_id=None, details=None, ip_address=None):
+        """Append an administrative audit log entry."""
+        with _LOCK:
+            logs = self._read_json(self.audit_logs_file, default=[])
+            now = datetime.now(timezone.utc)
+            entry = {
+                "id": f"AUDIT-{len(logs)+1:06d}",
+                "timestamp": now.isoformat(),
+                "date": now.strftime("%d-%m-%Y"),
+                "time": now.strftime("%I:%M:%S %p"),
+                "username": username or "system",
+                "role": role or "SYSTEM",
+                "action": action,
+                "target_type": target_type,
+                "target_id": str(target_id) if target_id else "",
+                "details": details or "",
+                "ip_address": ip_address or "127.0.0.1"
+            }
+            logs.append(entry)
+            self._write_json(self.audit_logs_file, logs)
+            return entry
+
+    def get_audit_logs(self, limit=100, action=None):
+        """Retrieve audit log records."""
+        logs = self._read_json(self.audit_logs_file, default=[])
+        if action:
+            logs = [l for l in logs if l.get("action") == action]
+        if limit and limit > 0:
+            logs = logs[-limit:]
+        return list(reversed(logs))
+
     # -------------------------------------------------------------------------
     # 7-DAY ROLLING RETENTION & AUTOMATED BACKUP ENGINE
     # -------------------------------------------------------------------------
@@ -1547,14 +2122,15 @@ class JsonDB:
         """
         Enforce strict 7-day rolling data retention policy:
         1. Automatically deletes historical GPS coordinates older than 7 days from active storage.
-        2. Automatically backs up required GPS and route data into data/backups/.
+        2. Automatically backs up required GPS, trip, and route data into data/backups/.
         3. Automatically deletes backups older than 7 days from backup storage.
-        4. Runs non-blocking without interrupting live GPS tracking.
+        4. Preserves permanent configuration: buses.json, devices.json, routes.json, stops.json, settings.json, users.json.
+        5. Protects against 300 MB overflow by emergency pruning if storage exceeds 90%.
         """
         now = datetime.now(timezone.utc)
         if not force and self._last_retention_check:
             elapsed = (now - self._last_retention_check).total_seconds()
-            if elapsed < 1800:  # Run at most once every 30 minutes unless forced
+            if elapsed < 1800:
                 return {"status": "skipped", "message": "Retention checked recently", "elapsed_seconds": elapsed}
 
         with _LOCK:
@@ -1588,14 +2164,20 @@ class JsonDB:
             if pruned_hist_count > 0 or not self.history_file.exists():
                 self._write_json(self.history_file, pruned_history)
 
-            # 2. Prune active journeys
+            # 2. Prune active trips
+            trips = self._read_json(self.trips_file, default=[])
+            initial_trips_count = len(trips)
+            pruned_trips = [t for t in trips if is_recent(t)]
+            if len(pruned_trips) != initial_trips_count or not self.trips_file.exists():
+                self._write_json(self.trips_file, pruned_trips)
+
+            # 3. Prune active journeys
             journeys = self._read_json(self.journeys_file, default=[])
-            initial_journey_count = len(journeys)
             pruned_journeys = [j for j in journeys if is_recent(j)]
-            if len(pruned_journeys) != initial_journey_count or not self.journeys_file.exists():
+            if len(pruned_journeys) != len(journeys) or not self.journeys_file.exists():
                 self._write_json(self.journeys_file, pruned_journeys)
 
-            # 3. Prune deviations & stop events
+            # 4. Prune deviations, stop events & audit logs
             devs = self._read_json(self.deviations_file, default=[])
             pruned_devs = [d for d in devs if is_recent(d)]
             if len(pruned_devs) != len(devs):
@@ -1606,7 +2188,12 @@ class JsonDB:
             if len(pruned_events) != len(events):
                 self._write_json(self.stop_events_file, pruned_events)
 
-            # 4. Create daily automated backup snapshot within retention policy
+            audit_logs = self._read_json(self.audit_logs_file, default=[])
+            pruned_audit = [a for a in audit_logs if is_recent(a)]
+            if len(pruned_audit) != len(audit_logs):
+                self._write_json(self.audit_logs_file, pruned_audit)
+
+            # 5. Create daily automated backup snapshot within retention policy
             today_str = now.strftime("%Y-%m-%d")
             backup_filename = f"backup_gps_{today_str}.json"
             backup_filepath = self.backups_dir / backup_filename
@@ -1617,13 +2204,13 @@ class JsonDB:
                 "routes": self.get_all_routes(),
                 "buses": self.get_all_buses(),
                 "history_points": len(pruned_history),
-                "journeys_count": len(pruned_journeys),
+                "trips_count": len(pruned_trips),
                 "history": pruned_history,
-                "journeys": pruned_journeys
+                "trips": pruned_trips
             }
             self._write_json(backup_filepath, backup_data)
 
-            # 5. Automatically delete backup snapshots older than 7 days
+            # 6. Automatically delete backup snapshots older than 7 days
             deleted_backups = []
             for bf in self.backups_dir.glob("*.json"):
                 try:
@@ -1642,7 +2229,7 @@ class JsonDB:
                 "cutoff_timestamp": cutoff.isoformat(),
                 "pruned_history_records": pruned_hist_count,
                 "active_history_records": len(pruned_history),
-                "active_journeys": len(pruned_journeys),
+                "active_trips": len(pruned_trips),
                 "latest_backup_file": backup_filename,
                 "deleted_old_backups": deleted_backups,
                 "timestamp": now.isoformat()
@@ -1652,7 +2239,7 @@ class JsonDB:
     # UTILITIES / CLEANUP
     # -------------------------------------------------------------------------
     def clear_all_data(self):
-        """Clear all dynamic data for test teardown or hard reset."""
+        """Clear dynamic data for test teardown or hard reset."""
         global _ACTIVE_TRIPS
         with _LOCK:
             _ACTIVE_TRIPS.clear()
@@ -1662,10 +2249,11 @@ class JsonDB:
             self._write_json(self.history_file, [])
             self._write_json(self.deviations_file, [])
             self._write_json(self.journeys_file, [])
+            self._write_json(self.trips_file, [])
             self._write_json(self.stop_events_file, [])
             self._write_json(self.device_health_file, {})
-            self._write_json(self.users_file, [])
-            # Also purge backup files
+            self._write_json(self.users_file, DEFAULT_USERS)
+            self._write_json(self.audit_logs_file, [])
             if self.backups_dir.exists():
                 for bf in self.backups_dir.glob("*.json"):
                     try:

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "AUDIT-000001",
+    "timestamp": "2026-11-10T02:23:45.364182+00:00",
+    "date": "10-11-2026",
+    "time": "02:23:45 AM",
+    "username": "admin",
+    "role": "ADMIN",
+    "action": "FLEET_INITIALIZATION",
+    "target_type": "SYSTEM",
+    "target_id": "FLEET_30",
+    "details": "Provisioned 30 college fleet buses with universal ESP tracking",
+    "ip_address": "127.0.0.1"
+  },
+  {
+    "id": "AUDIT-000002",
+    "timestamp": "2026-11-10T02:24:41.375116+00:00",
+    "date": "10-11-2026",
+    "time": "02:24:41 AM",
+    "username": "admin",
+    "role": "ADMIN",
+    "action": "USER_LOGIN",
+    "target_type": "SESSION",
+    "target_id": "admin",
+    "details": "User successfully authenticated",
+    "ip_address": "127.0.0.1"
+  }
+]

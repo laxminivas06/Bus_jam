@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "USR-001",
+    "username": "admin",
+    "password_hash": "scrypt:32768:8:1$QZZGX0xi2L8mwqV0$0e6b7db92b1d18c2fbf56188b10679cd472059b025f8c6fb89e7fdc73a153f0f98095c3a52fca8b81bb51dace5400317af8b3d91fc99d764018e3201a68e293e",
+    "role": "ADMIN",
+    "full_name": "System Administrator",
+    "created_at": "2026-11-10T00:00:00+00:00"
+  },
+  {
+    "id": "USR-002",
+    "username": "viewer",
+    "password_hash": "scrypt:32768:8:1$1caTcEMDe0M3ZzrH$1788c45b88f18071743968c37b37d88ddaac022da10e1db683b40b7942ca01b00c6a78eef81c474904d2fc8c7513813c91c31d8a148e423d7e49a098e8ab2336",
+    "role": "VIEWER",
+    "full_name": "Fleet Dispatch Viewer",
+    "created_at": "2026-11-10T00:00:00+00:00"
+  }
+]
