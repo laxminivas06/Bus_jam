@@ -47,7 +47,7 @@
                     </div>
                     <div class="campus-badge-text">
                         <span class="campus-title" id="headerCollegeName">SPHOORTHY ENGINEERING COLLEGE</span>
-                        <span class="campus-sub"><span id="headerActiveBusCount">0</span> of <span id="headerTotalBusCount">30</span> Buses Active</span>
+                        <span class="campus-sub"><span id="headerActiveBusCount">0</span> of <span id="headerTotalBusCount">0</span> Buses Active</span>
                     </div>
                 </div>
             </div>
@@ -56,7 +56,7 @@
                 <!-- 300 MB Storage Allocation Header Pill -->
                 <div class="storage-mini-pill" id="headerStoragePill" title="300 MB Maximum Storage Allocation">
                     <i class="fa-solid fa-hard-drive"></i>
-                    <span id="headerStorageText">0.5 / 300 MB</span>
+                    <span id="headerStorageText">0.0 / 300 MB</span>
                     <span class="storage-badge-dot normal" id="headerStorageDot"></span>
                 </div>
 
@@ -87,7 +87,7 @@
                     <i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span>
                 </button>
                 <button class="nav-link-btn" data-view="buses">
-                    <i class="fa-solid fa-bus"></i> <span>Buses</span> <span class="nav-counter" id="navBusesCount">30</span>
+                    <i class="fa-solid fa-bus"></i> <span>Buses</span> <span class="nav-counter" id="navBusesCount">0</span>
                 </button>
                 <button class="nav-link-btn" data-view="live-tracking">
                     <i class="fa-solid fa-map-location-dot"></i> <span>Live Bus Tracking</span>
@@ -117,7 +117,7 @@
                 <div class="view-header-row">
                     <div>
                         <h2><i class="fa-solid fa-chart-pie"></i> Fleet Dashboard Overview</h2>
-                        <p class="section-desc">Real-time status of 25–30+ buses, active daily trips, college arrivals, and 300 MB storage allocation</p>
+                        <p class="section-desc">Real-time status of registered fleet buses, active daily trips, college arrivals, and 300 MB storage allocation</p>
                     </div>
                     <div class="view-actions">
                         <button class="btn btn-primary btn-sm" id="btnDashboardToMap">
@@ -126,25 +126,25 @@
                     </div>
                 </div>
 
-                <!-- Centralized Metrics Grid -->
+                <!-- Centralized Metrics Grid (All Clickable) -->
                 <div class="overview-metrics-grid">
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashTotalBuses" style="cursor: pointer;" title="Click to View All Registered Buses">
                         <div class="metric-icon primary"><i class="fa-solid fa-bus"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Total Registered Buses</span>
-                            <strong class="metric-value" id="dashTotalBuses">30</strong>
-                            <span class="metric-sub">Supporting 25–30+ buses</span>
+                            <strong class="metric-value" id="dashTotalBuses">0</strong>
+                            <span class="metric-sub">Dynamic registered fleet</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashActiveBuses" style="cursor: pointer;" title="Click to View Live Online Buses">
                         <div class="metric-icon success"><i class="fa-solid fa-tower-broadcast"></i></div>
                         <div class="metric-info">
-                            <span class="metric-title">Active Buses</span>
+                            <span class="metric-title">Live Buses</span>
                             <strong class="metric-value text-success" id="dashActiveBuses">0</strong>
                             <span class="metric-sub"><span id="dashSendingGps">0</span> sending live GPS</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashRunningBuses" style="cursor: pointer;" title="Click to View Currently Moving Buses">
                         <div class="metric-icon info"><i class="fa-solid fa-road"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Currently Running</span>
@@ -152,7 +152,7 @@
                             <span class="metric-sub">En route to college / stops</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashReachedCollege" style="cursor: pointer;" title="Click to View Buses Arrived at College">
                         <div class="metric-icon warning"><i class="fa-solid fa-school-flag"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Reached College</span>
@@ -160,23 +160,23 @@
                             <span class="metric-sub">Inside college geofence</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashOfflineDevices" style="cursor: pointer;" title="Click to View Offline Buses">
                         <div class="metric-icon danger"><i class="fa-solid fa-microchip"></i></div>
                         <div class="metric-info">
-                            <span class="metric-title">Offline ESP Devices</span>
+                            <span class="metric-title">Offline Buses</span>
                             <strong class="metric-value text-danger" id="dashOfflineDevices">0</strong>
                             <span class="metric-sub">Hardware ping timed out</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashTotalRoutes" style="cursor: pointer;" title="Click to Open Route Management">
                         <div class="metric-icon secondary"><i class="fa-solid fa-route"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Total Routes</span>
-                            <strong class="metric-value" id="dashTotalRoutes">3</strong>
+                            <strong class="metric-value" id="dashTotalRoutes">0</strong>
                             <span class="metric-sub">Assigned transit corridors</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashCompletedTrips" style="cursor: pointer;" title="Click to Open Trip History">
                         <div class="metric-icon success"><i class="fa-solid fa-check-double"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Trips Completed Today</span>
@@ -184,7 +184,7 @@
                             <span class="metric-sub">2–4 trips per bus daily</span>
                         </div>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card" id="cardDashFleetDistance">
                         <div class="metric-icon info"><i class="fa-solid fa-gauge-high"></i></div>
                         <div class="metric-info">
                             <span class="metric-title">Fleet Distance Today</span>
@@ -250,13 +250,13 @@
                 <div class="content-box" style="margin-top: 20px;">
                     <div class="content-box-header">
                         <h3><i class="fa-solid fa-bolt"></i> Fleet Quick Navigation</h3>
-                        <span class="badge badge-info">30 Registered Buses</span>
+                        <span class="badge badge-info" id="dashQuickFleetBadge">Registered Fleet</span>
                     </div>
                     <div class="quick-nav-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 16px;">
                         <div class="quick-nav-card" id="cardNavBuses" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
                             <div style="font-size: 24px; color: var(--primary); margin-bottom: 8px;"><i class="fa-solid fa-bus"></i></div>
                             <h4 style="margin-bottom: 4px; font-weight: 700;">Fleet Bus Management</h4>
-                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">View all 30 buses, connection statuses, and GPS telemetry.</p>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">View registered fleet buses, connection statuses, and GPS telemetry.</p>
                             <span class="btn btn-outline btn-xs">Open Buses <i class="fa-solid fa-arrow-right"></i></span>
                         </div>
                         <div class="quick-nav-card" id="cardNavMap" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
@@ -289,14 +289,14 @@
                     <!-- Mobile View Toggle Tabs (Visible on small screens) -->
                     <div class="mobile-view-tabs">
                         <button class="mobile-tab-btn active" id="mobileTabBusesBtn">
-                            <i class="fa-solid fa-list-check"></i> Buses (<span id="mobileBusCount">30</span>)
+                            <i class="fa-solid fa-list-check"></i> Buses (<span id="mobileBusCount">0</span>)
                         </button>
                         <button class="mobile-tab-btn" id="mobileTabMapBtn">
                             <i class="fa-solid fa-map-location-dot"></i> Live Map
                         </button>
                     </div>
 
-                    <!-- Left Panel: 25-30+ Bus Selector -->
+                    <!-- Left Panel: Bus Selector -->
                     <aside class="bus-selector-panel" id="busSelectorPanel">
                         <div class="selector-banner">
                             <div class="banner-icon">
@@ -312,12 +312,13 @@
                         <div class="selector-controls">
                             <div class="search-input-wrapper">
                                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                                <input type="text" id="busSearchInput" placeholder="Search 30+ buses by name, ID, driver..." autocomplete="off">
+                                <input type="text" id="busSearchInput" placeholder="Search fleet buses by name, ID, driver..." autocomplete="off">
                                 <button class="clear-search-btn hidden" id="clearSearchBtn"><i class="fa-solid fa-xmark"></i></button>
                             </div>
 
                             <div class="quick-status-tabs">
-                                <button class="status-tab-btn active" data-filter="all">All (<span id="countAllBuses">30</span>)</button>
+                                <button class="status-tab-btn active" data-filter="all">All (<span id="countAllBuses">0</span>)</button>
+                                <button class="status-tab-btn" data-filter="online">Live (<span id="countOnlineBuses">0</span>)</button>
                                 <button class="status-tab-btn" data-filter="running">Running (<span id="countRunningBuses">0</span>)</button>
                                 <button class="status-tab-btn" data-filter="reached_college">College (<span id="countReachedCollegeBuses">0</span>)</button>
                                 <button class="status-tab-btn" data-filter="offline">Offline (<span id="countOfflineBuses">0</span>)</button>
@@ -326,12 +327,12 @@
 
                         <!-- Scrollable Bus Cards List -->
                         <div class="buses-list-container" id="busesListContainer">
-                            <!-- Populated dynamically with 30 bus cards -->
+                            <!-- Populated dynamically with bus cards -->
                         </div>
 
                         <!-- Panel Footer -->
                         <div class="selector-footer">
-                            <span>Total Fleet: <strong id="footerTotalCount">30</strong> buses</span>
+                            <span>Total Fleet: <strong id="footerTotalCount">0</strong> buses</span>
                             <span class="footer-sync"><i class="fa-solid fa-rotate"></i> Auto 5s</span>
                         </div>
                     </aside>
@@ -510,13 +511,13 @@
             </section>
 
             <!-- ================================================================ -->
-            <!-- VIEW 3: BUSES (Fleet Table & Cards for 25-30+ Buses) -->
+            <!-- VIEW 3: BUSES (Fleet Table & Management) -->
             <!-- ================================================================ -->
             <section class="app-view" id="viewBuses">
                 <div class="view-header-row">
                     <div>
                         <h2><i class="fa-solid fa-bus"></i> Fleet Bus Management</h2>
-                        <p class="section-desc">Manage all 25–30+ buses, assigned ESP hardware devices, routes, drivers, and daily distances</p>
+                        <p class="section-desc">Manage registered fleet buses, assigned ESP hardware devices, routes, drivers, and GPS tracking</p>
                     </div>
                     <div class="view-actions">
                         <button class="btn btn-primary btn-sm" id="btnFleetRegisterBus">
@@ -532,15 +533,15 @@
                         <input type="text" id="fleetSearchInput" placeholder="Filter by bus name, ID, license, device...">
                     </div>
                     <div class="quick-status-tabs" id="fleetStatusTabs">
-                        <button class="status-tab-btn active" data-fleet-filter="all">All (<span id="fleetCountAll">30</span>)</button>
+                        <button class="status-tab-btn active" data-fleet-filter="all">All (<span id="fleetCountAll">0</span>)</button>
                         <button class="status-tab-btn" data-fleet-filter="online">Online (<span id="fleetCountOnline">0</span>)</button>
-                        <button class="status-tab-btn" data-fleet-filter="offline">Offline (<span id="fleetCountOffline">30</span>)</button>
+                        <button class="status-tab-btn" data-fleet-filter="offline">Offline (<span id="fleetCountOffline">0</span>)</button>
                         <button class="status-tab-btn" data-fleet-filter="moving">Moving (<span id="fleetCountMoving">0</span>)</button>
                         <button class="status-tab-btn" data-fleet-filter="stopped">Stopped (<span id="fleetCountStopped">0</span>)</button>
                     </div>
                 </div>
 
-                <!-- Complete Fleet Table with All 30 Buses -->
+                <!-- Complete Fleet Table -->
                 <div class="content-box">
                     <div class="table-responsive">
                         <table class="data-table">
@@ -868,7 +869,7 @@
                         <div class="toolbar-item">
                             <label for="storageBusFilter">Filter by Bus:</label>
                             <select id="storageBusFilter" class="form-select">
-                                <option value="">-- All 30 Buses --</option>
+                                <option value="">-- All Registered Buses --</option>
                             </select>
                         </div>
                         <div class="toolbar-item">
@@ -1067,6 +1068,24 @@
                         <button type="button" class="btn btn-outline" id="btnCancelRegisterModal">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- BUS DETAILS MODAL -->
+    <div class="modal-backdrop hidden" id="busDetailsModal">
+        <div class="modal-card" style="max-width: 580px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-circle-info text-primary"></i> <span id="detailsModalBusTitle">Bus Details</span></h2>
+                <button class="close-modal-btn" id="closeBusDetailsModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" id="busDetailsModalBody">
+                <!-- Dynamically filled with bus telemetry, connection, route, and specs -->
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--border-color); background: var(--bg-subtle);">
+                <button type="button" class="btn btn-primary btn-sm" id="btnDetailsTrackMap"><i class="fa-solid fa-location-crosshairs"></i> Open on Map</button>
+                <button type="button" class="btn btn-outline btn-sm" id="btnDetailsEditBus"><i class="fa-solid fa-pen"></i> Edit Bus</button>
+                <button type="button" class="btn btn-outline btn-sm" id="closeBusDetailsModalBtn2">Close</button>
             </div>
         </div>
     </div>

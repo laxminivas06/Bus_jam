@@ -113,6 +113,13 @@ document.addEventListener("DOMContentLoaded", () => {
         cardNavMap: document.getElementById("cardNavMap"),
         cardNavRoutes: document.getElementById("cardNavRoutes"),
         cardNavStorage: document.getElementById("cardNavStorage"),
+        cardDashTotalBuses: document.getElementById("cardDashTotalBuses"),
+        cardDashActiveBuses: document.getElementById("cardDashActiveBuses"),
+        cardDashRunningBuses: document.getElementById("cardDashRunningBuses"),
+        cardDashReachedCollege: document.getElementById("cardDashReachedCollege"),
+        cardDashOfflineDevices: document.getElementById("cardDashOfflineDevices"),
+        cardDashTotalRoutes: document.getElementById("cardDashTotalRoutes"),
+        cardDashCompletedTrips: document.getElementById("cardDashCompletedTrips"),
 
         // View 2: Live Tracking
         mobileTabBusesBtn: document.getElementById("mobileTabBusesBtn"),
@@ -125,12 +132,22 @@ document.addEventListener("DOMContentLoaded", () => {
         clearSearchBtn: document.getElementById("clearSearchBtn"),
         statusTabBtns: document.querySelectorAll(".status-tab-btn[data-filter]"),
         countAllBuses: document.getElementById("countAllBuses"),
+        countOnlineBuses: document.getElementById("countOnlineBuses"),
         countRunningBuses: document.getElementById("countRunningBuses"),
         countReachedCollegeBuses: document.getElementById("countReachedCollegeBuses"),
         countOfflineBuses: document.getElementById("countOfflineBuses"),
         busesListContainer: document.getElementById("busesListContainer"),
         footerTotalCount: document.getElementById("footerTotalCount"),
         selectorCollegeTitle: document.getElementById("selectorCollegeTitle"),
+
+        // Bus Details Modal
+        busDetailsModal: document.getElementById("busDetailsModal"),
+        detailsModalBusTitle: document.getElementById("detailsModalBusTitle"),
+        busDetailsModalBody: document.getElementById("busDetailsModalBody"),
+        closeBusDetailsModalBtn: document.getElementById("closeBusDetailsModalBtn"),
+        closeBusDetailsModalBtn2: document.getElementById("closeBusDetailsModalBtn2"),
+        btnDetailsTrackMap: document.getElementById("btnDetailsTrackMap"),
+        btnDetailsEditBus: document.getElementById("btnDetailsEditBus"),
 
         // Telemetry HUD
         telemetryHudCard: document.getElementById("telemetryHudCard"),
@@ -295,6 +312,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // 3. MAP INITIALIZATION (Leaflet)
     // ==========================================
     function initMap() {
+        if (typeof L === "undefined") {
+            console.warn("Leaflet library not loaded yet, retrying in 500ms...");
+            setTimeout(initMap, 500);
+            return;
+        }
+        if (elements.map) return;
         const defaultCenter = [17.3156, 78.5833];
         const defaultZoom = 13;
 
@@ -462,12 +485,16 @@ document.addEventListener("DOMContentLoaded", () => {
         // Contextual activation for individual views
         if (viewName === "live-tracking") {
             setTimeout(() => {
+                if (typeof L !== "undefined" && !elements.map) {
+                    initMap();
+                }
                 if (elements.map) {
                     elements.map.invalidateSize();
                     if (state.selectedBusId) {
                         centerBus(state.selectedBusId);
                     } else if (state.buses.length > 0) {
-                        selectBus(state.buses[0].bus_id, false);
+                        const firstOnline = state.buses.find(b => b.is_online) || state.buses[0];
+                        selectBus(firstOnline.bus_id, false);
                     }
                 }
             }, 100);
@@ -536,8 +563,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const moving = state.buses.filter(b => b.is_moving).length;
         const stopped = state.buses.filter(b => b.is_online && !b.is_moving).length;
         const reached = state.buses.filter(b => b.is_reached_college).length;
+        const sendingGps = state.buses.filter(b => b.current_location && Math.abs(b.current_location.latitude || 0) > 0.0001).length;
 
         if (elements.countAllBuses) elements.countAllBuses.textContent = total;
+        if (elements.countOnlineBuses) elements.countOnlineBuses.textContent = online;
         if (elements.countRunningBuses) elements.countRunningBuses.textContent = moving;
         if (elements.countReachedCollegeBuses) elements.countReachedCollegeBuses.textContent = reached;
         if (elements.countOfflineBuses) elements.countOfflineBuses.textContent = offline;
@@ -548,9 +577,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (elements.fleetCountMoving) elements.fleetCountMoving.textContent = moving;
         if (elements.fleetCountStopped) elements.fleetCountStopped.textContent = stopped;
 
+        if (elements.dashTotalBuses) elements.dashTotalBuses.textContent = total;
+        if (elements.dashActiveBuses) elements.dashActiveBuses.textContent = online;
+        if (elements.dashSendingGps) elements.dashSendingGps.textContent = sendingGps;
+        if (elements.dashRunningBuses) elements.dashRunningBuses.textContent = moving;
+        if (elements.dashReachedCollege) elements.dashReachedCollege.textContent = reached;
+        if (elements.dashOfflineDevices) elements.dashOfflineDevices.textContent = offline;
+        if (elements.dashTotalRoutes) elements.dashTotalRoutes.textContent = state.routes.length;
+
         if (elements.mobileBusCount) elements.mobileBusCount.textContent = total;
         if (elements.footerTotalCount) elements.footerTotalCount.textContent = total;
         if (elements.navBusesCount) elements.navBusesCount.textContent = total;
+        if (elements.headerTotalBusCount) elements.headerTotalBusCount.textContent = total;
+        if (elements.headerActiveBusCount) elements.headerActiveBusCount.textContent = online;
     }
 
     function updateHeaderMetrics(metrics) {
@@ -710,6 +749,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function getFilteredBuses() {
         const query = (state.searchQuery || "").toLowerCase().trim();
         return state.buses.filter(bus => {
+            if (state.activeFilter === "online" && !bus.is_online) return false;
             if (state.activeFilter === "running" && !bus.is_moving) return false;
             if (state.activeFilter === "reached_college" && !bus.is_reached_college) return false;
             if (state.activeFilter === "offline" && bus.is_online) return false;
@@ -1190,7 +1230,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const lastComm = b.last_communication || (b.current_location && b.current_location.time ? b.current_location.time : "Never");
 
             return `
-                <tr>
+                <tr style="cursor: pointer;" onclick="if(!event.target.closest('button') && !event.target.closest('a') && !event.target.closest('input')) window.showBusDetailsModal('${b.bus_id}')" title="Click to view details of ${escapeHtml(b.bus_name)}">
                     <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
                     <td><strong class="mono" style="color:var(--primary); font-size:13px;">${escapeHtml(b.bus_id)}</strong><br><span style="font-weight:600;">${escapeHtml(b.bus_name)}</span></td>
                     <td><span class="mono" style="font-weight:600;">${escapeHtml(b.bus_number)}</span></td>
@@ -1205,6 +1245,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td><span class="text-muted font-mono" style="font-size:12px;">${escapeHtml(lastComm)}</span></td>
                     <td>
                         <div class="table-actions">
+                            <button class="btn btn-outline btn-xs" onclick="window.showBusDetailsModal('${b.bus_id}')" title="View Full Bus Details">
+                                <i class="fa-solid fa-circle-info"></i> Details
+                            </button>
                             <button class="btn btn-outline btn-xs" onclick="window.trackBusOnMap('${b.bus_id}')" title="Live Track on Map">
                                 <i class="fa-solid fa-location-crosshairs"></i> Track
                             </button>
@@ -1236,6 +1279,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 <option value="">-- Pick Unassigned Device --</option>
                 ${unassigned.map(d => `<option value="${d.device_id}">${d.device_id} (${d.device_type})</option>`).join("")}
             `;
+        }
+
+        // Dynamic Storage Filter Dropdown
+        if (elements.storageBusFilter) {
+            const curVal = elements.storageBusFilter.value;
+            elements.storageBusFilter.innerHTML = `
+                <option value="">-- All Registered Buses --</option>
+                ${state.buses.map(b => `<option value="${b.bus_id}" ${b.bus_id === curVal ? 'selected' : ''}>${escapeHtml(b.bus_id)} (${escapeHtml(b.bus_number)})</option>`).join("")}
+            `;
+        }
+
+        // Dynamic Trip History Bus Dropdown
+        if (elements.tripHistoryBusSelect && state.buses.length > 0) {
+            const curVal = elements.tripHistoryBusSelect.value || state.selectedTripBusId;
+            elements.tripHistoryBusSelect.innerHTML = state.buses.map(b => `
+                <option value="${b.bus_id}" ${b.bus_id === curVal ? 'selected' : ''}>${escapeHtml(b.bus_name)} (${escapeHtml(b.bus_id)})</option>
+            `).join("");
         }
     }
 
@@ -1270,6 +1330,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const btnEmpty = document.getElementById("btnEmptyCreateRoute");
             if (btnEmpty) {
                 btnEmpty.addEventListener("click", () => {
+                    currentEditingRouteId = null;
+                    if (elements.routeFormTitle) elements.routeFormTitle.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Create New Transit Route`;
+                    if (elements.routeForm) elements.routeForm.reset();
                     if (elements.routeCreateCard) {
                         elements.routeCreateCard.classList.remove("hidden");
                         elements.routeCreateCard.scrollIntoView({ behavior: "smooth" });
@@ -1282,20 +1345,69 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.routesCardsGrid.innerHTML = state.routes.map(r => {
             const waypointsCount = (r.waypoints || []).length;
             const stopsCount = (r.stops || []).length;
+            const rId = r.route_id || r.id;
+
+            // Assigned buses list
+            const assigned = r.assigned_buses || state.buses.filter(b => (b.route_id || "").toUpperCase() === String(rId).toUpperCase());
+            const assignedHtml = assigned.length > 0
+                ? assigned.map(b => `
+                    <span class="badge badge-primary" style="font-size:11px; margin:2px;" title="${escapeHtml(b.bus_number)}">
+                        <i class="fa-solid fa-bus"></i> ${escapeHtml(b.bus_name || b.bus_id)} (${escapeHtml(b.bus_number)})
+                        <button type="button" onclick="window.unassignBusFromRoute('${rId}', '${b.bus_id}')" style="background:none; border:none; color:inherit; cursor:pointer; margin-left:4px;" title="Unassign bus from route">&times;</button>
+                    </span>
+                `).join("")
+                : `<span class="text-muted" style="font-size:12px;">No buses assigned yet</span>`;
+
+            // Selectable buses for assignment
+            const busOptions = state.buses.map(b => `<option value="${b.bus_id}">${escapeHtml(b.bus_name)} (${escapeHtml(b.bus_id)})</option>`).join("");
+
             return `
                 <div class="route-card">
                     <div class="route-card-header">
                         <span class="route-title">${escapeHtml(r.route_name)}</span>
-                        <span class="route-code-badge">${escapeHtml(r.route_code || r.route_id)}</span>
+                        <span class="route-code-badge">${escapeHtml(r.route_code || rId)}</span>
                     </div>
                     <div class="route-path-flow">
-                        <div class="route-path-step"><i class="fa-solid fa-circle-dot text-primary"></i> Origin: ${escapeHtml(r.origin_name || "Transit Terminal")}</div>
-                        <div class="route-path-step"><i class="fa-solid fa-map-pin text-info"></i> Intermediate Stops: <strong>${stopsCount} stops</strong></div>
-                        <div class="route-path-step"><i class="fa-solid fa-graduation-cap text-success"></i> Destination: ${escapeHtml(r.destination_name || "Campus Terminal")}</div>
+                        <div class="route-path-step"><i class="fa-solid fa-circle-dot text-primary"></i> <strong>Origin:</strong> ${escapeHtml(r.origin_name || "Transit Terminal")}</div>
+                        <div class="route-path-step"><i class="fa-solid fa-map-pin text-info"></i> <strong>Intermediate Stops:</strong> ${stopsCount} stops</div>
+                        <div class="route-path-step"><i class="fa-solid fa-graduation-cap text-success"></i> <strong>Destination:</strong> ${escapeHtml(r.destination_name || "Campus Terminal")}</div>
                     </div>
-                    <div class="route-card-footer">
-                        <span class="text-muted"><i class="fa-solid fa-route"></i> ${waypointsCount} waypoints</span>
-                        <span class="badge badge-info">${(r.total_distance_km || 0.0).toFixed(1)} km</span>
+
+                    <!-- Assigned Buses Section -->
+                    <div style="margin: 12px 0; padding: 10px; background: var(--bg-subtle); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;">
+                            <i class="fa-solid fa-bus"></i> Assigned Fleet Buses (${assigned.length}):
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">
+                            ${assignedHtml}
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select id="assignBusSelect_${rId}" class="form-select" style="font-size:12px; padding:3px 6px; flex:1;">
+                                <option value="">-- Pick a Bus to Assign --</option>
+                                ${busOptions}
+                            </select>
+                            <button type="button" class="btn btn-primary btn-xs" onclick="window.assignBusToRouteAction('${rId}')">
+                                <i class="fa-solid fa-link"></i> Assign
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="route-card-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <span class="text-muted" style="font-size:12px;"><i class="fa-solid fa-route"></i> ${waypointsCount} waypoints</span>
+                            <span class="badge badge-info" style="margin-left: 6px;">${(r.total_distance_km || 0.0).toFixed(1)} km</span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-outline btn-xs" onclick="window.viewRouteOnMap('${rId}')" title="Plot on Live Tracking Map">
+                                <i class="fa-solid fa-map-location-dot"></i> View on Map
+                            </button>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="window.editRouteAction('${rId}')" title="Edit Route Details">
+                                <i class="fa-solid fa-pen"></i> Edit
+                            </button>
+                            <button type="button" class="btn btn-danger btn-xs" onclick="window.deleteRouteAction('${rId}')" title="Delete Route">
+                                <i class="fa-solid fa-trash"></i> Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1347,11 +1459,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (err) {
             console.error("Geocoding error:", err);
             suggestionsBox.innerHTML = `<div class="geocoding-item text-danger">Search error</div>`;
-        }
-    }
-        } catch (err) {
-            console.error("Geocoding error:", err);
-            suggestionsBox.classList.add("hidden");
         }
     }
 
@@ -1777,6 +1884,261 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    window.setFleetFilter = function (filter) {
+        state.fleetFilter = filter;
+        if (elements.fleetStatusTabs) {
+            elements.fleetStatusTabs.forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.fleetFilter === filter);
+            });
+        }
+        renderFleetTable();
+    };
+
+    window.setLiveFilter = function (filter) {
+        state.activeFilter = filter;
+        if (elements.statusTabBtns) {
+            elements.statusTabBtns.forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.filter === filter);
+            });
+        }
+        renderBusesList();
+    };
+
+    window.showBusDetailsModal = function (busId) {
+        const bus = state.buses.find(b => b.bus_id === busId);
+        if (!bus) return;
+        selectedBusDetailsId = busId;
+
+        const isOnline = !!bus.is_online;
+        const isMoving = !!bus.is_moving;
+        const statusClass = bus.is_reached_college ? "reached_college" : (isOnline ? (isMoving ? "moving" : "stopped") : "offline");
+        const statusLabel = bus.is_reached_college ? "Reached College" : (isOnline ? (isMoving ? "Moving" : "Stopped") : "Offline");
+
+        const hasGps = bus.current_location && bus.current_location.latitude && bus.current_location.longitude && Math.abs(bus.current_location.latitude) > 0.0001;
+        const gpsBadge = hasGps 
+            ? `<span class="badge badge-success"><i class="fa-solid fa-satellite"></i> GPS Available</span>`
+            : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;"><i class="fa-solid fa-hourglass-half"></i> Waiting for GPS data</span>`;
+
+        const coordsText = hasGps 
+            ? `<code class="mono">${roundCoord(bus.current_location.latitude)}, ${roundCoord(bus.current_location.longitude)}</code>`
+            : `<span class="text-muted"><i class="fa-solid fa-hourglass-half"></i> Waiting for GPS data</span>`;
+
+        const lastComm = bus.last_communication || (bus.current_location && bus.current_location.time ? bus.current_location.time : "Never");
+
+        if (elements.detailsModalBusTitle) {
+            elements.detailsModalBusTitle.textContent = `${bus.bus_name} (${bus.bus_id})`;
+        }
+
+        if (elements.busDetailsModalBody) {
+            elements.busDetailsModalBody.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-subtle); padding:12px; border-radius:8px;">
+                        <div>
+                            <span class="status-pill ${statusClass}" style="font-size:12px;">${statusLabel}</span>
+                            <span class="badge ${isOnline ? 'badge-success' : 'badge-secondary'}" style="margin-left:6px;">
+                                ${isOnline ? '<i class="fa-solid fa-wifi"></i> Device Connected' : '<i class="fa-solid fa-plug-circle-xmark"></i> Device Disconnected'}
+                            </span>
+                        </div>
+                        <div>${gpsBadge}</div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="detail-item">
+                            <span class="text-muted" style="font-size:11px; text-transform:uppercase;">Registration Number</span>
+                            <div><strong class="mono" style="font-size:14px;">${escapeHtml(bus.bus_number)}</strong></div>
+                        </div>
+                        <div class="detail-item">
+                            <span class="text-muted" style="font-size:11px; text-transform:uppercase;">Assigned Device ID</span>
+                            <div><code class="mono">${escapeHtml(bus.device_id)}</code></div>
+                        </div>
+                        <div class="detail-item">
+                            <span class="text-muted" style="font-size:11px; text-transform:uppercase;">Assigned Route</span>
+                            <div><strong>${escapeHtml(bus.route_name || "Unassigned")}</strong> <small class="text-muted">(${escapeHtml(bus.route_id || "None")})</small></div>
+                        </div>
+                        <div class="detail-item">
+                            <span class="text-muted" style="font-size:11px; text-transform:uppercase;">Driver Name & Phone</span>
+                            <div><strong>${escapeHtml(bus.driver_name || "Unassigned")}</strong> <span class="text-muted">(${escapeHtml(bus.driver_phone || "N/A")})</span></div>
+                        </div>
+                    </div>
+                    <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; padding:12px;">
+                        <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;"><i class="fa-solid fa-satellite"></i> GPS Telemetry</h4>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px;">
+                            <div><span class="text-muted">Coordinates:</span> ${coordsText}</div>
+                            <div><span class="text-muted">Last Update:</span> <span class="mono">${escapeHtml(lastComm)}</span></div>
+                            <div><span class="text-muted">Speed:</span> <span class="mono">${(bus.speed || 0.0).toFixed(1)} km/h</span></div>
+                            <div><span class="text-muted">Heading:</span> <span class="mono">${bus.heading || 0}°</span></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (elements.busDetailsModal) {
+            elements.busDetailsModal.classList.remove("hidden");
+        }
+    };
+
+    window.viewRouteOnMap = function (routeId) {
+        const r = state.routes.find(x => String(x.route_id || x.id).toUpperCase() === String(routeId).toUpperCase());
+        if (!r) return;
+
+        switchView("live-tracking");
+
+        setTimeout(() => {
+            if (!elements.map) return;
+
+            if (state.routePolyline) {
+                elements.map.removeLayer(state.routePolyline);
+                state.routePolyline = null;
+            }
+
+            if (elements.stopsMarkersGroup) {
+                elements.stopsMarkersGroup.clearLayers();
+            }
+
+            const wps = r.waypoints || [];
+            if (wps.length === 0) {
+                showToast(`Route '${r.route_name}' has no waypoints`, "warning");
+                return;
+            }
+
+            const latlngs = wps.map(wp => [wp.lat !== undefined ? wp.lat : wp[0], wp.lng !== undefined ? wp.lng : wp[1]]);
+            state.routePolyline = L.polyline(latlngs, {
+                color: "#2563eb",
+                weight: 5,
+                opacity: 0.85
+            }).addTo(elements.map);
+
+            (r.stops || []).forEach((st, idx) => {
+                const sLat = st.latitude || st.lat;
+                const sLng = st.longitude || st.lng;
+                if (sLat && sLng) {
+                    const stopIcon = L.divIcon({
+                        className: "route-stop-icon",
+                        html: `<div style="background:#0284c7; color:#fff; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; border:2px solid #fff; box-shadow:0 2px 5px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+                        iconSize: [22, 22],
+                        iconAnchor: [11, 11]
+                    });
+                    L.marker([sLat, sLng], { icon: stopIcon })
+                        .bindTooltip(`<strong>Stop ${idx + 1}: ${escapeHtml(st.name || st.stop_name)}</strong>`, { direction: "top" })
+                        .addTo(elements.stopsMarkersGroup);
+                }
+            });
+
+            elements.map.fitBounds(state.routePolyline.getBounds(), { padding: [40, 40] });
+            showToast(`Plotting route: ${r.route_name}`, "info");
+        }, 150);
+    };
+
+    window.editRouteAction = function (routeId) {
+        const r = state.routes.find(x => String(x.route_id || x.id).toUpperCase() === String(routeId).toUpperCase());
+        if (!r) return;
+
+        currentEditingRouteId = r.route_id || r.id;
+
+        if (elements.routeNameInput) elements.routeNameInput.value = r.route_name || "";
+        if (elements.routeCodeInput) elements.routeCodeInput.value = r.route_code || r.route_id || "";
+        if (elements.routeOriginInput) elements.routeOriginInput.value = r.origin_name || "";
+        if (elements.routeDestInput) elements.routeDestInput.value = r.destination_name || "";
+
+        if (r.waypoints && r.waypoints.length > 0) {
+            const firstWp = r.waypoints[0];
+            const lastWp = r.waypoints[r.waypoints.length - 1];
+            confirmedOriginCoords = {
+                lat: firstWp.lat !== undefined ? firstWp.lat : firstWp[0],
+                lng: firstWp.lng !== undefined ? firstWp.lng : firstWp[1]
+            };
+            confirmedDestCoords = {
+                lat: lastWp.lat !== undefined ? lastWp.lat : lastWp[0],
+                lng: lastWp.lng !== undefined ? lastWp.lng : lastWp[1]
+            };
+            if (elements.originConfirmedPill) {
+                if (elements.originCoordsText) elements.originCoordsText.textContent = `${confirmedOriginCoords.lat}, ${confirmedOriginCoords.lng}`;
+                elements.originConfirmedPill.classList.remove("hidden");
+            }
+            if (elements.destConfirmedPill) {
+                if (elements.destCoordsText) elements.destCoordsText.textContent = `${confirmedDestCoords.lat}, ${confirmedDestCoords.lng}`;
+                elements.destConfirmedPill.classList.remove("hidden");
+            }
+        }
+
+        currentNewRouteStops = (r.stops || []).map(s => ({ ...s }));
+        renderSelectedStopsList();
+
+        if (elements.routeFormTitle) {
+            elements.routeFormTitle.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Edit Route: ${escapeHtml(r.route_name)}`;
+        }
+        if (elements.routeCreateCard) {
+            elements.routeCreateCard.classList.remove("hidden");
+            elements.routeCreateCard.scrollIntoView({ behavior: "smooth" });
+        }
+    };
+
+    window.deleteRouteAction = async function (routeId) {
+        if (!confirm(`Are you sure you want to delete route '${routeId}'? Any buses assigned to it will be unassigned.`)) return;
+        try {
+            const resp = await fetch(`/api/routes/${encodeURIComponent(routeId)}`, {
+                method: "DELETE"
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === "success") {
+                showToast(data.message || "Route deleted successfully!", "success");
+                fetchRoutes();
+                fetchBuses();
+            } else {
+                showToast(data.message || "Failed to delete route", "error");
+            }
+        } catch (err) {
+            showToast("Error deleting route", "error");
+        }
+    };
+
+    window.assignBusToRouteAction = async function (routeId) {
+        const selectElem = document.getElementById(`assignBusSelect_${routeId}`);
+        if (!selectElem || !selectElem.value) {
+            showToast("Please pick a bus to assign", "warning");
+            return;
+        }
+        const busId = selectElem.value;
+        try {
+            const resp = await fetch(`/api/routes/${encodeURIComponent(routeId)}/assign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bus_id: busId, action: "assign" })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === "success") {
+                showToast(data.message || "Bus assigned to route successfully!", "success");
+                fetchRoutes();
+                fetchBuses();
+            } else {
+                showToast(data.message || "Failed to assign bus to route", "error");
+            }
+        } catch (err) {
+            showToast("Error assigning bus to route", "error");
+        }
+    };
+
+    window.unassignBusFromRoute = async function (routeId, busId) {
+        if (!confirm(`Unassign bus '${busId}' from this route?`)) return;
+        try {
+            const resp = await fetch(`/api/routes/${encodeURIComponent(routeId)}/assign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bus_id: busId, action: "unassign" })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === "success") {
+                showToast(data.message || "Bus unassigned!", "success");
+                fetchRoutes();
+                fetchBuses();
+            } else {
+                showToast(data.message || "Failed to unassign bus", "error");
+            }
+        } catch (err) {
+            showToast("Error unassigning bus", "error");
+        }
+    };
+
     // ==========================================
     // 16. EVENT LISTENERS ATTACHMENT
     // ==========================================
@@ -1786,7 +2148,7 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.brandLogoHome.addEventListener("click", () => switchView("dashboard"));
     }
 
-    // 10 Primary Nav Buttons
+    // 7 Primary Nav Buttons
     elements.navButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             const view = btn.dataset.view;
@@ -1799,10 +2161,16 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.btnDashboardToMap.addEventListener("click", () => switchView("live-tracking"));
     }
     if (elements.btnViewAllBuses) {
-        elements.btnViewAllBuses.addEventListener("click", () => switchView("buses"));
+        elements.btnViewAllBuses.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("all");
+        });
     }
     if (elements.cardNavBuses) {
-        elements.cardNavBuses.addEventListener("click", () => switchView("buses"));
+        elements.cardNavBuses.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("all");
+        });
     }
     if (elements.cardNavMap) {
         elements.cardNavMap.addEventListener("click", () => switchView("live-tracking"));
@@ -1812,6 +2180,77 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (elements.cardNavStorage) {
         elements.cardNavStorage.addEventListener("click", () => switchView("storage"));
+    }
+
+    // Dashboard Clickable Metric Cards
+    if (elements.cardDashTotalBuses) {
+        elements.cardDashTotalBuses.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("all");
+        });
+    }
+    if (elements.cardDashActiveBuses) {
+        elements.cardDashActiveBuses.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("online");
+        });
+    }
+    if (elements.cardDashRunningBuses) {
+        elements.cardDashRunningBuses.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("moving");
+        });
+    }
+    if (elements.cardDashReachedCollege) {
+        elements.cardDashReachedCollege.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("stopped");
+        });
+    }
+    if (elements.cardDashOfflineDevices) {
+        elements.cardDashOfflineDevices.addEventListener("click", () => {
+            switchView("buses");
+            setFleetFilter("offline");
+        });
+    }
+    if (elements.cardDashTotalRoutes) {
+        elements.cardDashTotalRoutes.addEventListener("click", () => {
+            switchView("routes");
+        });
+    }
+    if (elements.cardDashCompletedTrips) {
+        elements.cardDashCompletedTrips.addEventListener("click", () => {
+            switchView("trip-history");
+        });
+    }
+
+    // Bus Details Modal Listeners
+    if (elements.btnDetailsTrackMap) {
+        elements.btnDetailsTrackMap.addEventListener("click", () => {
+            if (selectedBusDetailsId) {
+                if (elements.busDetailsModal) elements.busDetailsModal.classList.add("hidden");
+                switchView("live-tracking");
+                selectBus(selectedBusDetailsId, true);
+            }
+        });
+    }
+    if (elements.btnDetailsEditBus) {
+        elements.btnDetailsEditBus.addEventListener("click", () => {
+            if (selectedBusDetailsId) {
+                if (elements.busDetailsModal) elements.busDetailsModal.classList.add("hidden");
+                editBusModal(selectedBusDetailsId);
+            }
+        });
+    }
+    if (elements.closeBusDetailsModalBtn) {
+        elements.closeBusDetailsModalBtn.addEventListener("click", () => {
+            if (elements.busDetailsModal) elements.busDetailsModal.classList.add("hidden");
+        });
+    }
+    if (elements.closeBusDetailsModalBtn2) {
+        elements.closeBusDetailsModalBtn2.addEventListener("click", () => {
+            if (elements.busDetailsModal) elements.busDetailsModal.classList.add("hidden");
+        });
     }
 
     // Register Bus Modal Triggers
@@ -2090,12 +2529,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (elements.btnToggleCreateRoute) {
         elements.btnToggleCreateRoute.addEventListener("click", () => {
             if (elements.routeCreateCard) {
+                currentEditingRouteId = null;
+                if (elements.routeFormTitle) elements.routeFormTitle.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Create New Transit Route`;
+                if (elements.routeForm) elements.routeForm.reset();
+                currentNewRouteStops = [];
+                renderSelectedStopsList();
                 elements.routeCreateCard.classList.toggle("hidden");
+                if (!elements.routeCreateCard.classList.contains("hidden")) {
+                    elements.routeCreateCard.scrollIntoView({ behavior: "smooth" });
+                }
             }
         });
     }
     if (elements.btnCancelRouteForm) {
         elements.btnCancelRouteForm.addEventListener("click", () => {
+            currentEditingRouteId = null;
+            if (elements.routeFormTitle) elements.routeFormTitle.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Create New Transit Route`;
+            if (elements.routeForm) elements.routeForm.reset();
             if (elements.routeCreateCard) elements.routeCreateCard.classList.add("hidden");
         });
     }
@@ -2229,28 +2679,34 @@ document.addEventListener("DOMContentLoaded", () => {
             };
 
             try {
-                const resp = await fetch("/api/routes", {
-                    method: "POST",
+                const url = currentEditingRouteId ? `/api/routes/${encodeURIComponent(currentEditingRouteId)}` : "/api/routes";
+                const method = currentEditingRouteId ? "PUT" : "POST";
+
+                const resp = await fetch(url, {
+                    method: method,
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
                 });
                 const data = await resp.json();
                 if (resp.ok && data.status === "success") {
-                    showToast(`Route '${routeName}' created!`, "success");
+                    showToast(currentEditingRouteId ? `Route '${routeName}' updated successfully!` : `Route '${routeName}' created!`, "success");
                     elements.routeForm.reset();
                     currentNewRouteStops = [];
                     confirmedOriginCoords = null;
                     confirmedDestCoords = null;
+                    currentEditingRouteId = null;
+                    if (elements.routeFormTitle) elements.routeFormTitle.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Create New Transit Route`;
                     renderSelectedStopsList();
                     if (elements.originConfirmedPill) elements.originConfirmedPill.classList.add("hidden");
                     if (elements.destConfirmedPill) elements.destConfirmedPill.classList.add("hidden");
                     if (elements.routeCreateCard) elements.routeCreateCard.classList.add("hidden");
                     fetchRoutes();
+                    fetchBuses();
                 } else {
-                    showToast(data.message || "Route creation failed", "error");
+                    showToast(data.message || "Route save failed", "error");
                 }
             } catch (err) {
-                showToast("Route creation error", "error");
+                showToast("Route save error", "error");
             }
         });
     }

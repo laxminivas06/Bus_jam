@@ -1521,14 +1521,49 @@ def get_bus_route_analysis(bus_id):
 # -----------------------------------------------------------------------------
 @api_bp.route("/routes", methods=["GET"])
 def get_routes():
-    """List all predefined & auto-detected routes."""
+    """List all predefined & auto-detected routes with assigned buses."""
     routes = db_instance.get_all_routes()
+    buses = db_instance.get_all_buses()
     for r in routes:
+        rid = str(r.get("id") or r.get("route_id") or "").strip().upper()
         if not r.get("route_id") and r.get("id"):
             r["route_id"] = r.get("id")
         elif not r.get("id") and r.get("route_id"):
             r["id"] = r.get("route_id")
+        assigned = [b for b in buses if str(b.get("route_id", "")).strip().upper() == rid]
+        r["assigned_buses"] = [
+            {"bus_id": b.get("bus_id"), "bus_name": b.get("bus_name"), "bus_number": b.get("bus_number")}
+            for b in assigned
+        ]
+        r["assigned_bus_count"] = len(assigned)
     return jsonify({"status": "success", "count": len(routes), "routes": routes}), 200
+
+
+@api_bp.route("/routes/<route_id>/assign", methods=["POST", "PUT"])
+@admin_required
+def assign_bus_to_route(route_id):
+    """Assign or unassign a registered bus to a transit route."""
+    data = request.get_json(silent=True) or {}
+    bus_id = str(data.get("bus_id") or "").strip().upper()
+    action = data.get("action", "assign")
+
+    route = db_instance.get_route(route_id)
+    if not route:
+        return jsonify({"status": "error", "message": f"Route '{route_id}' not found"}), 404
+
+    bus = db_instance.get_bus(bus_id)
+    if not bus:
+        return jsonify({"status": "error", "message": f"Bus '{bus_id}' not found"}), 404
+
+    r_name = route.get("route_name") or route.get("name") or route_id
+    if action == "unassign":
+        db_instance.update_bus(bus["bus_id"], {"route_id": "", "route_name": "Unassigned"})
+        msg = f"Bus '{bus['bus_id']}' unassigned from route '{route_id}'"
+    else:
+        db_instance.update_bus(bus["bus_id"], {"route_id": route_id, "route_name": r_name})
+        msg = f"Bus '{bus['bus_id']}' assigned to route '{r_name}'"
+
+    return jsonify({"status": "success", "message": msg}), 200
 
 
 @api_bp.route("/routes/<route_id>", methods=["GET"])
@@ -2377,6 +2412,7 @@ def create_bus_admin():
 
 
 @api_bp.route("/admin/buses/<bus_id>", methods=["PUT"])
+@api_bp.route("/buses/<bus_id>", methods=["PUT"])
 @admin_required
 def update_bus_admin(bus_id):
     """Update bus details in JSON database."""
@@ -2410,6 +2446,7 @@ def update_bus_admin(bus_id):
 
 
 @api_bp.route("/admin/buses/<bus_id>", methods=["DELETE"])
+@api_bp.route("/buses/<bus_id>", methods=["DELETE"])
 @admin_required
 def delete_bus_admin(bus_id):
     """Delete a bus from JSON database."""

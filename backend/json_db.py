@@ -39,49 +39,9 @@ DEFAULT_USERS = [
     }
 ]
 
-# Standard College Fleet: All 30 Registered Buses (Single Source of Truth)
-DEFAULT_BUSES = [
-    {
-        "bus_id": f"BUS-{i:02d}",
-        "bus_name": f"Sphoorthy Bus {i:02d}",
-        "bus_number": f"TS 09 UB {1000 + i}",
-        "device_id": f"AIV-DEV-{i:03d}",
-        "route_id": "",
-        "route_name": "Unassigned",
-        "driver_name": f"Driver {i:02d}",
-        "driver_phone": f"+91 98480 {20000 + i:05d}",
-        "capacity": 50,
-        "campus": "Nadergul Main Campus",
-        "is_active": True,
-        "is_online": False,
-        "is_moving": False,
-        "status": "offline",
-        "current_location": None,
-        "last_seen": None,
-        "speed": 0.0,
-        "heading": 0.0,
-        "registered_at": "2026-11-10T00:00:00+00:00"
-    }
-    for i in range(1, 31)
-]
-
-# Standard College Hardware Device Mappings: 30 ESP Nodes (1-to-1 Mapping)
-DEFAULT_DEVICES = [
-    {
-        "device_id": f"AIV-DEV-{i:03d}",
-        "device_name": f"ESP8266 Fleet Node {i:02d}",
-        "device_type": "ESP8266",
-        "assigned_bus_id": f"BUS-{i:02d}",
-        "assigned_bus_number": f"TS 09 UB {1000 + i}",
-        "status": "offline",
-        "last_seen": None,
-        "last_ip": None,
-        "firmware_version": "3.2.0",
-        "api_key": "YOUR_API_KEY",
-        "registered_at": "2026-11-10T00:00:00+00:00"
-    }
-    for i in range(1, 31)
-]
+# Dynamic Fleet Architecture: Zero hardcoded or dummy buses/devices
+DEFAULT_BUSES = []
+DEFAULT_DEVICES = []
 
 # Initial Default Route & Stop Templates (Zero hardcoded routes by requirement: user-created only)
 DEFAULT_ROUTES = []
@@ -162,16 +122,6 @@ class JsonDB:
             current_users = self._read_json(self.users_file, default=[])
             if not current_users:
                 self._write_json_direct(self.users_file, DEFAULT_USERS)
-
-            # Ensure 30 registered fleet buses exist if empty
-            current_buses = self._read_json(self.buses_file, default=[])
-            if not current_buses:
-                self._write_json_direct(self.buses_file, DEFAULT_BUSES)
-
-            # Ensure 30 registered fleet devices exist if empty
-            current_devices = self._read_json(self.devices_file, default=[])
-            if not current_devices:
-                self._write_json_direct(self.devices_file, DEFAULT_DEVICES)
 
             self.backups_dir.mkdir(parents=True, exist_ok=True)
             self.enforce_seven_day_retention_and_backup(force=False)
@@ -1173,14 +1123,25 @@ class JsonDB:
             return None
 
     def delete_route(self, route_id):
-        """Delete a route."""
+        """Delete a route and gracefully unassign any buses assigned to it."""
         with _LOCK:
             routes = self.get_all_routes()
             target = str(route_id).strip().upper()
-            filtered = [r for r in routes if r.get("id", "").upper() != target]
+            filtered = [r for r in routes if str(r.get("id", "")).upper() != target and str(r.get("route_id", "")).upper() != target]
             if len(filtered) == len(routes):
                 return False
             self._write_json(self.routes_file, filtered)
+
+            # Properly unassign buses mapped to this deleted route
+            buses = self.get_all_buses()
+            updated_any = False
+            for b in buses:
+                if str(b.get("route_id", "")).strip().upper() == target:
+                    b["route_id"] = ""
+                    b["route_name"] = "Unassigned"
+                    updated_any = True
+            if updated_any:
+                self._write_json(self.buses_file, buses)
             return True
 
     # -------------------------------------------------------------------------
@@ -2137,13 +2098,12 @@ class JsonDB:
     # UTILITIES / CLEANUP
     # -------------------------------------------------------------------------
     def clear_all_data(self):
-        """Clear dynamic tracking data and reset database to clean baseline with all 30 buses ready."""
+        """Clear dynamic tracking data and reset database to clean baseline with zero dummy records."""
         global _ACTIVE_TRIPS
-        import copy
         with _LOCK:
             _ACTIVE_TRIPS.clear()
-            self._write_json(self.buses_file, copy.deepcopy(DEFAULT_BUSES))
-            self._write_json(self.devices_file, copy.deepcopy(DEFAULT_DEVICES))
+            self._write_json(self.buses_file, [])
+            self._write_json(self.devices_file, [])
             self._write_json(self.routes_file, [])
             self._write_json(self.stops_file, [])
             self._write_json(self.locations_file, {})
