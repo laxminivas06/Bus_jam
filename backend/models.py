@@ -9,7 +9,7 @@ class Bus:
                  route_name=None, route_id=None, driver_name="Unassigned",
                  driver_phone="N/A", capacity=50, is_active=True,
                  campus="Sphoorthy Campus Lead",
-                 created_at=None, updated_at=None, id=None):
+                 created_at=None, updated_at=None, id=None, **kwargs):
         self.id = id
         self.bus_id = str(bus_id).strip().upper()
         self.bus_name = bus_name or f"Bus {self.bus_id}"
@@ -85,6 +85,26 @@ class Bus:
         bus_routes = db_instance.get_routes_by_bus(self.bus_id)
         total_routes_detected = len(bus_routes)
 
+        has_coords = bool(curr_loc and curr_loc.get("latitude") and curr_loc.get("longitude") and (abs(float(curr_loc.get("latitude", 0))) > 0.0001))
+        latest_latitude = round(float(curr_loc["latitude"]), 6) if has_coords else None
+        latest_longitude = round(float(curr_loc["longitude"]), 6) if has_coords else None
+
+        last_comm = curr_loc.get("time") or curr_loc.get("updated_at") if curr_loc else None
+        if not last_comm:
+            last_comm = "Never"
+
+        gps_display_status = "GPS Available" if (is_online and not has_gps_issue and has_coords) else "GPS Unavailable"
+        device_connection_status = "Connected" if is_online else "Disconnected"
+
+        movement_display_status = "Offline"
+        if is_online:
+            if is_reached_college:
+                movement_display_status = "Reached College"
+            elif is_moving:
+                movement_display_status = "Moving"
+            else:
+                movement_display_status = "Stopped"
+
         return {
             "id": self.id,
             "bus_id": self.bus_id,
@@ -95,6 +115,12 @@ class Bus:
             "route_name": self.route_name,
             "current_route_status": current_route_status,
             "connection_status": connection_status,
+            "device_connection_status": device_connection_status,
+            "gps_display_status": gps_display_status,
+            "movement_status": movement_display_status,
+            "latest_latitude": latest_latitude,
+            "latest_longitude": latest_longitude,
+            "last_communication": last_comm,
             "driver_name": self.driver_name,
             "driver_phone": self.driver_phone,
             "capacity": self.capacity,

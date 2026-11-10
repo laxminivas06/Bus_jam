@@ -39,253 +39,53 @@ DEFAULT_USERS = [
     }
 ]
 
-
-# Initial Seed Route Templates & Stops
-DEFAULT_ROUTES = [
+# Standard College Fleet: All 30 Registered Buses (Single Source of Truth)
+DEFAULT_BUSES = [
     {
-        "id": "AUTOROUTE-01",
-        "bus_id": "BUS-01",
-        "route_name": "Route 01: Koti Central -> Campus Terminal",
-        "route_code": "R01",
-        "origin": "Koti Central Bus Station",
-        "destination": "Main Campus Terminal",
-        "description": "Primary college arterial corridor learned from GPS movement.",
-        "first_recorded": "08:00 AM",
-        "last_recorded": "09:15 AM",
-        "frequency": 14,
-        "operating_times": ["08:00 AM - 09:15 AM", "04:30 PM - 05:45 PM"],
-        "distance_km": 11.2,
-        "duration_minutes": 75,
-        "waypoints": [
-            [17.385044, 78.486671],
-            [17.391200, 78.474500],
-            [17.402100, 78.461000],
-            [17.425500, 78.451200],
-            [17.442000, 78.448000],
-            [17.458000, 78.441000]
-        ],
-        "assigned_stops": ["STOP-01", "STOP-02", "STOP-03", "STOP-04", "STOP-05"]
-    },
-    {
-        "id": "AUTOROUTE-02",
-        "bus_id": "BUS002",
-        "route_name": "Route 02: Secunderabad -> Begumpet Tech Park",
-        "route_code": "R02",
-        "origin": "Secunderabad Station",
-        "destination": "Begumpet Tech Park",
-        "description": "Northern transit feeder route.",
-        "first_recorded": "07:30 AM",
-        "last_recorded": "08:35 AM",
-        "frequency": 11,
-        "operating_times": ["07:30 AM - 08:35 AM", "01:45 PM - 02:50 PM"],
-        "distance_km": 8.4,
-        "duration_minutes": 65,
-        "waypoints": [
-            [17.439930, 78.498274],
-            [17.443500, 78.487000],
-            [17.441100, 78.471200],
-            [17.438000, 78.459000],
-            [17.435000, 78.446000]
-        ],
-        "assigned_stops": ["STOP-06", "STOP-07", "STOP-08"]
-    },
-    {
-        "id": "AUTOROUTE-03",
-        "bus_id": "BUS003",
-        "route_name": "Route 03: LB Nagar -> Malakpet Terminal",
-        "route_code": "R03",
-        "origin": "LB Nagar Metro Station",
-        "destination": "Malakpet Terminal",
-        "description": "Eastern feeder corridor.",
-        "first_recorded": "08:15 AM",
-        "last_recorded": "09:05 AM",
-        "frequency": 9,
-        "operating_times": ["08:15 AM - 09:05 AM", "05:10 PM - 06:00 PM"],
-        "distance_km": 9.1,
-        "duration_minutes": 50,
-        "waypoints": [
-            [17.345719, 78.552230],
-            [17.368800, 78.524500],
-            [17.375500, 78.498000],
-            [17.382000, 78.482000]
-        ],
-        "assigned_stops": ["STOP-09", "STOP-10"]
+        "bus_id": f"BUS-{i:02d}",
+        "bus_name": f"Sphoorthy Bus {i:02d}",
+        "bus_number": f"TS 09 UB {1000 + i}",
+        "device_id": f"AIV-DEV-{i:03d}",
+        "route_id": "",
+        "route_name": "Unassigned",
+        "driver_name": f"Driver {i:02d}",
+        "driver_phone": f"+91 98480 {20000 + i:05d}",
+        "capacity": 50,
+        "campus": "Nadergul Main Campus",
+        "is_active": True,
+        "is_online": False,
+        "is_moving": False,
+        "status": "offline",
+        "current_location": None,
+        "last_seen": None,
+        "speed": 0.0,
+        "heading": 0.0,
+        "registered_at": "2026-11-10T00:00:00+00:00"
     }
+    for i in range(1, 31)
 ]
 
+# Standard College Hardware Device Mappings: 30 ESP Nodes (1-to-1 Mapping)
 DEFAULT_DEVICES = [
     {
-        "id": 1,
-        "device_id": "ESP8266-BUS-01",
-        "device_name": "Campus Express 01 Dash Unit",
-        "mac_address": "AA:BB:CC:11:22:01",
+        "device_id": f"AIV-DEV-{i:03d}",
+        "device_name": f"ESP8266 Fleet Node {i:02d}",
         "device_type": "ESP8266",
-        "firmware_version": "3.2.0",
-        "device_token": "tok_esp8266_bus01_sec9876",
-        "assigned_bus_id": "BUS-01",
-        "is_registered": True,
-        "auto_discovered": False,
+        "assigned_bus_id": f"BUS-{i:02d}",
+        "assigned_bus_number": f"TS 09 UB {1000 + i}",
         "status": "offline",
         "last_seen": None,
-        "ip_address": None,
-        "created_at": "2026-11-09T00:00:00+00:00",
-        "updated_at": "2026-11-09T00:00:00+00:00"
-    },
-    {
-        "id": 2,
-        "device_id": "ESP8266-BUS-02",
-        "device_name": "Campus Express 02 Dash Unit",
-        "mac_address": "AA:BB:CC:11:22:02",
-        "device_type": "ESP8266",
+        "last_ip": None,
         "firmware_version": "3.2.0",
-        "device_token": "tok_esp8266_bus02_sec9876",
-        "assigned_bus_id": "BUS-02",
-        "is_registered": True,
-        "auto_discovered": False,
-        "status": "offline",
-        "last_seen": None,
-        "ip_address": None,
-        "created_at": "2026-11-09T00:00:00+00:00",
-        "updated_at": "2026-11-09T00:00:00+00:00"
-    },
-    {
-        "id": 3,
-        "device_id": "ESP8266-BUS-03",
-        "device_name": "Campus Metro Shuttle Unit",
-        "mac_address": "AA:BB:CC:11:22:03",
-        "device_type": "ESP8266",
-        "firmware_version": "3.2.0",
-        "device_token": "tok_esp8266_bus03_sec9876",
-        "assigned_bus_id": "BUS-03",
-        "is_registered": True,
-        "auto_discovered": False,
-        "status": "offline",
-        "last_seen": None,
-        "ip_address": None,
-        "created_at": "2026-11-09T00:00:00+00:00",
-        "updated_at": "2026-11-09T00:00:00+00:00"
-    },
-    {
-        "id": 4,
-        "device_id": "ESP8266-BUS-04",
-        "device_name": "Campus City Liner Unit",
-        "mac_address": "AA:BB:CC:11:22:04",
-        "device_type": "ESP8266",
-        "firmware_version": "3.2.0",
-        "device_token": "tok_esp8266_bus04_sec9876",
-        "assigned_bus_id": "BUS-04",
-        "is_registered": True,
-        "auto_discovered": False,
-        "status": "offline",
-        "last_seen": None,
-        "ip_address": None,
-        "created_at": "2026-11-09T00:00:00+00:00",
-        "updated_at": "2026-11-09T00:00:00+00:00"
+        "api_key": "YOUR_API_KEY",
+        "registered_at": "2026-11-10T00:00:00+00:00"
     }
+    for i in range(1, 31)
 ]
 
-DEFAULT_STOPS = [
-    {
-        "id": "STOP-01",
-        "name": "Koti Central Bus Stop",
-        "code": "KT01",
-        "latitude": 17.385044,
-        "longitude": 78.486671,
-        "radius_m": 80,
-        "route_id": "AUTOROUTE-01",
-        "sequence": 1
-    },
-    {
-        "id": "STOP-02",
-        "name": "Abids GPO Circle",
-        "code": "AB02",
-        "latitude": 17.391200,
-        "longitude": 78.474500,
-        "radius_m": 75,
-        "route_id": "AUTOROUTE-01",
-        "sequence": 2
-    },
-    {
-        "id": "STOP-03",
-        "name": "Lakdi-ka-pul Junction",
-        "code": "LK03",
-        "latitude": 17.402100,
-        "longitude": 78.461000,
-        "radius_m": 75,
-        "route_id": "AUTOROUTE-01",
-        "sequence": 3
-    },
-    {
-        "id": "STOP-04",
-        "name": "Punjagutta Circle",
-        "code": "PJ04",
-        "latitude": 17.425500,
-        "longitude": 78.451200,
-        "radius_m": 85,
-        "route_id": "AUTOROUTE-01",
-        "sequence": 4
-    },
-    {
-        "id": "STOP-05",
-        "name": "Main Campus Gate 1",
-        "code": "CP05",
-        "latitude": 17.458000,
-        "longitude": 78.441000,
-        "radius_m": 100,
-        "route_id": "AUTOROUTE-01",
-        "sequence": 5
-    },
-    {
-        "id": "STOP-06",
-        "name": "Secunderabad Station Stop",
-        "code": "SC06",
-        "latitude": 17.439930,
-        "longitude": 78.498274,
-        "radius_m": 80,
-        "route_id": "AUTOROUTE-02",
-        "sequence": 1
-    },
-    {
-        "id": "STOP-07",
-        "name": "Paradise Circle Stop",
-        "code": "PR07",
-        "latitude": 17.443500,
-        "longitude": 78.487000,
-        "radius_m": 75,
-        "route_id": "AUTOROUTE-02",
-        "sequence": 2
-    },
-    {
-        "id": "STOP-08",
-        "name": "Begumpet Airport Road Stop",
-        "code": "BG08",
-        "latitude": 17.441100,
-        "longitude": 78.471200,
-        "radius_m": 85,
-        "route_id": "AUTOROUTE-02",
-        "sequence": 3
-    },
-    {
-        "id": "STOP-09",
-        "name": "LB Nagar Ring Road Stop",
-        "code": "LB09",
-        "latitude": 17.345719,
-        "longitude": 78.552230,
-        "radius_m": 90,
-        "route_id": "AUTOROUTE-03",
-        "sequence": 1
-    },
-    {
-        "id": "STOP-10",
-        "name": "Dilsukhnagar Bus Complex",
-        "code": "DS10",
-        "latitude": 17.368800,
-        "longitude": 78.524500,
-        "radius_m": 80,
-        "route_id": "AUTOROUTE-03",
-        "sequence": 2
-    }
-]
+# Initial Default Route & Stop Templates (Zero hardcoded routes by requirement: user-created only)
+DEFAULT_ROUTES = []
+DEFAULT_STOPS = []
 
 
 class JsonDB:
@@ -362,6 +162,16 @@ class JsonDB:
             current_users = self._read_json(self.users_file, default=[])
             if not current_users:
                 self._write_json_direct(self.users_file, DEFAULT_USERS)
+
+            # Ensure 30 registered fleet buses exist if empty
+            current_buses = self._read_json(self.buses_file, default=[])
+            if not current_buses:
+                self._write_json_direct(self.buses_file, DEFAULT_BUSES)
+
+            # Ensure 30 registered fleet devices exist if empty
+            current_devices = self._read_json(self.devices_file, default=[])
+            if not current_devices:
+                self._write_json_direct(self.devices_file, DEFAULT_DEVICES)
 
             self.backups_dir.mkdir(parents=True, exist_ok=True)
             self.enforce_seven_day_retention_and_backup(force=False)
@@ -1034,6 +844,8 @@ class JsonDB:
         with _LOCK:
             target = str(bus_id).strip().upper()
             history = self._read_json(self.history_file, default=[])
+            if not isinstance(history, list):
+                history = []
 
             now = timestamp or datetime.now(timezone.utc)
             now_iso = now.isoformat()
@@ -1610,6 +1422,8 @@ class JsonDB:
         settings = self.get_settings()
         return {
             "college_name": settings.get("college_name", "Sphoorthy Engineering College"),
+            "college_address": settings.get("college_address", "Sagar Road, Nadargul Village, Hyderabad, Telangana 501510"),
+            "campus_details": settings.get("campus_details", "Main Campus Terminal & Engineering Corridors"),
             "college_latitude": float(settings.get("college_latitude", 17.3156)),
             "college_longitude": float(settings.get("college_longitude", 78.5833)),
             "college_geofence_radius_meters": int(settings.get("college_geofence_radius_meters", 120))
@@ -1621,6 +1435,10 @@ class JsonDB:
             settings = self.get_settings()
             if "college_name" in config_data and config_data["college_name"]:
                 settings["college_name"] = str(config_data["college_name"]).strip()
+            if "college_address" in config_data and config_data["college_address"]:
+                settings["college_address"] = str(config_data["college_address"]).strip()
+            if "campus_details" in config_data and config_data["campus_details"]:
+                settings["campus_details"] = str(config_data["campus_details"]).strip()
             if "college_latitude" in config_data:
                 settings["college_latitude"] = round(float(config_data["college_latitude"]), 6)
             if "college_longitude" in config_data:
@@ -1913,6 +1731,23 @@ class JsonDB:
         elif percent_used >= 70.0:
             warning_level = "WARNING_70"
 
+        history_records = self._read_json(self.history_file, default=[])
+        trips_records = self._read_json(self.trips_file, default=[])
+        total_tracking_records = len(history_records)
+
+        dates = []
+        for r in history_records:
+            d = r.get("date") or (r.get("time", "").split("T")[0] if "T" in str(r.get("time")) else str(r.get("time"))[:10])
+            if d and len(d) >= 8:
+                dates.append(d)
+        for t in trips_records:
+            d = t.get("date")
+            if d and len(d) >= 8:
+                dates.append(d)
+
+        oldest_date = min(dates) if dates else "No tracking data"
+        latest_date = max(dates) if dates else "No tracking data"
+
         return {
             "max_storage_mb": max_mb,
             "max_storage_bytes": MAX_STORAGE_BYTES,
@@ -1921,6 +1756,10 @@ class JsonDB:
             "available_mb": available_mb,
             "percent_used": percent_used,
             "warning_level": warning_level,
+            "tracking_records_stored": total_tracking_records,
+            "oldest_tracking_date": oldest_date,
+            "latest_tracking_date": latest_date,
+            "cleanup_status": "Active (7-Day Rolling Retention)",
             "category_breakdown_mb": {
                 k: round(v / (1024.0 * 1024.0), 4) for k, v in categories.items()
             },
@@ -1930,6 +1769,65 @@ class JsonDB:
             "retention_policy": "7_days_rolling",
             "last_retention_check": self._last_retention_check.isoformat() if self._last_retention_check else None
         }
+
+    def get_stored_tracking_records(self, bus_id=None, date=None, limit=100):
+        """Retrieve stored tracking records for data management inspection."""
+        records = self._read_json(self.history_file, default=[])
+        filtered = []
+        target_bus = str(bus_id).strip().upper() if (bus_id and bus_id.upper() != "ALL") else None
+        target_date = str(date).strip() if (date and date.upper() != "ALL") else None
+
+        for idx, r in enumerate(records):
+            r_bus = str(r.get("bus_id") or r.get("bus_number") or "").upper()
+            r_date = r.get("date") or (r.get("time", "").split("T")[0] if "T" in str(r.get("time")) else str(r.get("time"))[:10])
+
+            if target_bus and r_bus != target_bus:
+                continue
+            if target_date and r_date != target_date:
+                continue
+
+            filtered.append({
+                "index": idx,
+                "bus_id": r_bus or "UNKNOWN",
+                "device_id": r.get("device_id", "N/A"),
+                "latitude": r.get("latitude"),
+                "longitude": r.get("longitude"),
+                "speed_kmh": round(float(r.get("speed_kmh") or r.get("speed") or 0.0), 1),
+                "time": r.get("time", "N/A"),
+                "date": r_date
+            })
+            if len(filtered) >= limit:
+                break
+        return filtered
+
+    def delete_selected_tracking_records(self, bus_id=None, date=None, indices=None):
+        """Delete only selected tracking data safely without affecting buses or routes."""
+        with _LOCK:
+            records = self._read_json(self.history_file, default=[])
+            initial_count = len(records)
+
+            if indices is not None and len(indices) > 0:
+                idx_set = set(int(x) for x in indices)
+                records = [r for i, r in enumerate(records) if i not in idx_set]
+            elif bus_id or date:
+                target_bus = str(bus_id).strip().upper() if (bus_id and bus_id.upper() != "ALL") else None
+                target_date = str(date).strip() if (date and date.upper() != "ALL") else None
+
+                def keep_record(r):
+                    r_bus = str(r.get("bus_id") or r.get("bus_number") or "").upper()
+                    r_date = r.get("date") or (r.get("time", "").split("T")[0] if "T" in str(r.get("time")) else str(r.get("time"))[:10])
+                    if target_bus and r_bus == target_bus:
+                        if not target_date or r_date == target_date:
+                            return False
+                    elif target_date and r_date == target_date:
+                        if not target_bus or r_bus == target_bus:
+                            return False
+                    return True
+
+                records = [r for r in records if keep_record(r)]
+
+            self._write_json(self.history_file, records)
+            return initial_count - len(records)
 
     # -------------------------------------------------------------------------
     # USER AUTHENTICATION & RBAC SECURITY
@@ -2239,12 +2137,15 @@ class JsonDB:
     # UTILITIES / CLEANUP
     # -------------------------------------------------------------------------
     def clear_all_data(self):
-        """Clear dynamic data for test teardown or hard reset."""
+        """Clear dynamic tracking data and reset database to clean baseline with all 30 buses ready."""
         global _ACTIVE_TRIPS
+        import copy
         with _LOCK:
             _ACTIVE_TRIPS.clear()
-            self._write_json(self.buses_file, [])
-            self._write_json(self.devices_file, [])
+            self._write_json(self.buses_file, copy.deepcopy(DEFAULT_BUSES))
+            self._write_json(self.devices_file, copy.deepcopy(DEFAULT_DEVICES))
+            self._write_json(self.routes_file, [])
+            self._write_json(self.stops_file, [])
             self._write_json(self.locations_file, {})
             self._write_json(self.history_file, [])
             self._write_json(self.deviations_file, [])

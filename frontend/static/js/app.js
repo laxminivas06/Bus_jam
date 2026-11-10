@@ -53,6 +53,18 @@ document.addEventListener("DOMContentLoaded", () => {
     // Temporary storage for intermediate stops during route creation
     let currentNewRouteStops = [];
     let confirmedOriginCoords = null;
+    let confirmedDestCoords = null;
+    let loadedStorageRecords = [];
+    let pendingDeleteItems = [];
+
+    // Helper debounce utility
+    function debounce(fn, delay = 250) {
+        let timer = null;
+        return function (...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
 
     // ==========================================
     // 2. DOM ELEMENTS CACHE
@@ -96,9 +108,11 @@ document.addEventListener("DOMContentLoaded", () => {
         dashStorageUsed: document.getElementById("dashStorageUsed"),
         dashStorageAvailable: document.getElementById("dashStorageAvailable"),
         dashStoragePercent: document.getElementById("dashStoragePercent"),
-        dashFleetTableBody: document.getElementById("dashFleetTableBody"),
         btnDashboardToMap: document.getElementById("btnDashboardToMap"),
-        btnViewAllBuses: document.getElementById("btnViewAllBuses"),
+        cardNavBuses: document.getElementById("cardNavBuses"),
+        cardNavMap: document.getElementById("cardNavMap"),
+        cardNavRoutes: document.getElementById("cardNavRoutes"),
+        cardNavStorage: document.getElementById("cardNavStorage"),
 
         // View 2: Live Tracking
         mobileTabBusesBtn: document.getElementById("mobileTabBusesBtn"),
@@ -106,6 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
         mobileBusCount: document.getElementById("mobileBusCount"),
         busSelectorPanel: document.getElementById("busSelectorPanel"),
         liveMapPanel: document.getElementById("liveMapPanel"),
+        mapEmptyStateOverlay: document.getElementById("mapEmptyStateOverlay"),
         busSearchInput: document.getElementById("busSearchInput"),
         clearSearchBtn: document.getElementById("clearSearchBtn"),
         statusTabBtns: document.querySelectorAll(".status-tab-btn[data-filter]"),
@@ -162,13 +177,17 @@ document.addEventListener("DOMContentLoaded", () => {
         fleetSearchInput: document.getElementById("fleetSearchInput"),
         fleetStatusTabs: document.querySelectorAll(".status-tab-btn[data-fleet-filter]"),
         fleetCountAll: document.getElementById("fleetCountAll"),
-        fleetCountRunning: document.getElementById("fleetCountRunning"),
-        fleetCountCollege: document.getElementById("fleetCountCollege"),
+        fleetCountOnline: document.getElementById("fleetCountOnline"),
         fleetCountOffline: document.getElementById("fleetCountOffline"),
+        fleetCountMoving: document.getElementById("fleetCountMoving"),
+        fleetCountStopped: document.getElementById("fleetCountStopped"),
         fleetTableBody: document.getElementById("fleetTableBody"),
         btnFleetRegisterBus: document.getElementById("btnFleetRegisterBus"),
 
-        // View 4: Register Bus
+        // Register Bus Elements
+        registerBusModal: document.getElementById("registerBusModal"),
+        closeRegisterBusModalBtn: document.getElementById("closeRegisterBusModalBtn"),
+        btnCancelRegisterModal: document.getElementById("btnCancelRegisterModal"),
         dedicatedRegisterBusForm: document.getElementById("dedicatedRegisterBusForm"),
         regBusName: document.getElementById("regBusName"),
         regBusId: document.getElementById("regBusId"),
@@ -181,7 +200,7 @@ document.addEventListener("DOMContentLoaded", () => {
         regCollegeDest: document.getElementById("regCollegeDest"),
         btnResetRegisterForm: document.getElementById("btnResetRegisterForm"),
 
-        // View 5: Route Management
+        // View 4: Route Management
         btnToggleCreateRoute: document.getElementById("btnToggleCreateRoute"),
         routeCreateCard: document.getElementById("routeCreateCard"),
         routeFormTitle: document.getElementById("routeFormTitle"),
@@ -193,15 +212,19 @@ document.addEventListener("DOMContentLoaded", () => {
         originSuggestionsBox: document.getElementById("originSuggestionsBox"),
         originConfirmedPill: document.getElementById("originConfirmedPill"),
         originCoordsText: document.getElementById("originCoordsText"),
+        routeDestInput: document.getElementById("routeDestInput"),
+        btnGeocodeDest: document.getElementById("btnGeocodeDest"),
+        destSuggestionsBox: document.getElementById("destSuggestionsBox"),
+        destConfirmedPill: document.getElementById("destConfirmedPill"),
+        destCoordsText: document.getElementById("destCoordsText"),
         routeStopSearchInput: document.getElementById("routeStopSearchInput"),
         btnAddStopSearch: document.getElementById("btnAddStopSearch"),
         stopSuggestionsBox: document.getElementById("stopSuggestionsBox"),
         selectedStopsList: document.getElementById("selectedStopsList"),
-        routeDestInput: document.getElementById("routeDestInput"),
         btnCancelRouteForm: document.getElementById("btnCancelRouteForm"),
         routesCardsGrid: document.getElementById("routesCardsGrid"),
 
-        // View 6: Trip History
+        // View 5: Trip History
         tripHistoryBusSelect: document.getElementById("tripHistoryBusSelect"),
         tripHistoryDateSelect: document.getElementById("tripHistoryDateSelect"),
         tripViewDist: document.getElementById("tripViewDist"),
@@ -211,47 +234,39 @@ document.addEventListener("DOMContentLoaded", () => {
         tripCountBadge: document.getElementById("tripCountBadge"),
         tripsTableBody: document.getElementById("tripsTableBody"),
 
-        // View 7: College Settings
+        // View 6: College Settings
         collegeConfigForm: document.getElementById("collegeConfigForm"),
         collegeNameInput: document.getElementById("collegeNameInput"),
+        collegeAddressInput: document.getElementById("collegeAddressInput"),
+        campusDetailsInput: document.getElementById("campusDetailsInput"),
         collegeRadiusInput: document.getElementById("collegeRadiusInput"),
         collegeLatInput: document.getElementById("collegeLatInput"),
         collegeLngInput: document.getElementById("collegeLngInput"),
         lblCollegeRadius: document.getElementById("lblCollegeRadius"),
         lblCollegeCoords: document.getElementById("lblCollegeCoords"),
 
-        // View 8: Devices
-        devTotalCount: document.getElementById("devTotalCount"),
-        devOnlineCount: document.getElementById("devOnlineCount"),
-        devGpsCount: document.getElementById("devGpsCount"),
-        devUnassignedCount: document.getElementById("devUnassignedCount"),
-        devUnassignedBanner: document.getElementById("devUnassignedBanner"),
-        devicesTableViewBody: document.getElementById("devicesTableViewBody"),
-
-        // View 9: Storage
+        // View 7: Storage Management & Records Explorer
         btnTriggerStorageCleanup: document.getElementById("btnTriggerStorageCleanup"),
         storageHeroUsageText: document.getElementById("storageHeroUsageText"),
         storageHeroBadge: document.getElementById("storageHeroBadge"),
         storageHeroProgressFill: document.getElementById("storageHeroProgressFill"),
-        storageCatDb: document.getElementById("storageCatDb"),
-        storageCatTracking: document.getElementById("storageCatTracking"),
-        storageCatTrips: document.getElementById("storageCatTrips"),
-        storageCatBackups: document.getElementById("storageCatBackups"),
-        storageCatSecurity: document.getElementById("storageCatSecurity"),
+        storageRecordsCount: document.getElementById("storageRecordsCount"),
+        storageOldestDate: document.getElementById("storageOldestDate"),
+        storageLatestDate: document.getElementById("storageLatestDate"),
+        storageRetentionStatus: document.getElementById("storageRetentionStatus"),
+        storageAvailMb: document.getElementById("storageAvailMb"),
+        storageBusFilter: document.getElementById("storageBusFilter"),
+        storageDateFilter: document.getElementById("storageDateFilter"),
+        btnFilterStorageRecords: document.getElementById("btnFilterStorageRecords"),
+        storageRecordsTableBody: document.getElementById("storageRecordsTableBody"),
+        chkSelectAllStorageRecords: document.getElementById("chkSelectAllStorageRecords"),
+        btnDeleteSelectedRecords: document.getElementById("btnDeleteSelectedRecords"),
+        storageDeleteConfirmModal: document.getElementById("storageDeleteConfirmModal"),
+        closeDeleteConfirmModalBtn: document.getElementById("closeDeleteConfirmModalBtn"),
+        btnConfirmDeleteRecords: document.getElementById("btnConfirmDeleteRecords"),
+        btnCancelDeleteRecords: document.getElementById("btnCancelDeleteRecords"),
+        deleteRecordsCountText: document.getElementById("deleteRecordsCountText"),
         storageFilesTableBody: document.getElementById("storageFilesTableBody"),
-
-        // View 10: Security
-        secCurrentUsername: document.getElementById("secCurrentUsername"),
-        secCurrentRole: document.getElementById("secCurrentRole"),
-        changePasswordForm: document.getElementById("changePasswordForm"),
-        oldPassInput: document.getElementById("oldPassInput"),
-        newPassInput: document.getElementById("newPassInput"),
-        secUsersTableBody: document.getElementById("secUsersTableBody"),
-        createNewUserForm: document.getElementById("createNewUserForm"),
-        newUserNameInput: document.getElementById("newUserNameInput"),
-        newUserRoleSelect: document.getElementById("newUserRoleSelect"),
-        newUserPasswordInput: document.getElementById("newUserPasswordInput"),
-        secAuditLogsTableBody: document.getElementById("secAuditLogsTableBody"),
 
         // Modals
         authLoginModal: document.getElementById("authLoginModal"),
@@ -410,20 +425,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
-    // 4. VIEW SWITCHING LOGIC (10 SECTIONS)
+    // 4. VIEW SWITCHING LOGIC (7 PRIMARY SECTIONS)
     // ==========================================
     function getViewId(viewName) {
         switch (viewName) {
             case "dashboard": return "viewDashboard";
-            case "live-tracking": return "viewLiveTracking";
             case "buses": return "viewBuses";
-            case "register-bus": return "viewRegisterBus";
+            case "live-tracking": return "viewLiveTracking";
             case "routes": return "viewRouteManagement";
             case "trip-history": return "viewTripHistory";
             case "college-settings": return "viewCollegeSettings";
-            case "devices": return "viewDevices";
             case "storage": return "viewStorage";
-            case "security": return "viewSecurity";
             default: return "viewDashboard";
         }
     }
@@ -463,20 +475,15 @@ document.addEventListener("DOMContentLoaded", () => {
             fetchDashboard();
         } else if (viewName === "buses") {
             renderFleetTable();
-        } else if (viewName === "register-bus") {
-            populateRegisterBusDropdowns();
         } else if (viewName === "routes") {
             fetchRoutes();
         } else if (viewName === "trip-history") {
             loadTripHistoryView();
         } else if (viewName === "college-settings") {
             loadCollegeSettingsView();
-        } else if (viewName === "devices") {
-            fetchDevices();
         } else if (viewName === "storage") {
             fetchStorageMetrics();
-        } else if (viewName === "security") {
-            fetchSecurityData();
+            loadStorageRecords();
         }
     }
 
@@ -500,7 +507,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (state.currentView === "dashboard") {
                 renderDashboardMetrics(data.metrics || {});
-                renderDashFleetTable();
             } else if (state.currentView === "buses") {
                 renderFleetTable();
             }
@@ -525,19 +531,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateCounts() {
         const total = state.buses.length;
-        const running = state.buses.filter(b => b.is_moving).length;
-        const reached = state.buses.filter(b => b.is_reached_college).length;
+        const online = state.buses.filter(b => b.is_online).length;
         const offline = state.buses.filter(b => !b.is_online).length;
+        const moving = state.buses.filter(b => b.is_moving).length;
+        const stopped = state.buses.filter(b => b.is_online && !b.is_moving).length;
+        const reached = state.buses.filter(b => b.is_reached_college).length;
 
         if (elements.countAllBuses) elements.countAllBuses.textContent = total;
-        if (elements.countRunningBuses) elements.countRunningBuses.textContent = running;
+        if (elements.countRunningBuses) elements.countRunningBuses.textContent = moving;
         if (elements.countReachedCollegeBuses) elements.countReachedCollegeBuses.textContent = reached;
         if (elements.countOfflineBuses) elements.countOfflineBuses.textContent = offline;
 
         if (elements.fleetCountAll) elements.fleetCountAll.textContent = total;
-        if (elements.fleetCountRunning) elements.fleetCountRunning.textContent = running;
-        if (elements.fleetCountCollege) elements.fleetCountCollege.textContent = reached;
+        if (elements.fleetCountOnline) elements.fleetCountOnline.textContent = online;
         if (elements.fleetCountOffline) elements.fleetCountOffline.textContent = offline;
+        if (elements.fleetCountMoving) elements.fleetCountMoving.textContent = moving;
+        if (elements.fleetCountStopped) elements.fleetCountStopped.textContent = stopped;
 
         if (elements.mobileBusCount) elements.mobileBusCount.textContent = total;
         if (elements.footerTotalCount) elements.footerTotalCount.textContent = total;
@@ -623,6 +632,21 @@ document.addEventListener("DOMContentLoaded", () => {
         if (elements.storageHeroProgressFill) {
             elements.storageHeroProgressFill.style.width = `${Math.min(pct, 100)}%`;
             elements.storageHeroProgressFill.className = `storage-progress-fill ${lvl.toLowerCase().replace(/_/g, "-")}`;
+        }
+        if (elements.storageRecordsCount) elements.storageRecordsCount.textContent = stor.tracking_records_stored !== undefined ? stor.tracking_records_stored : 0;
+        if (elements.storageOldestDate) elements.storageOldestDate.textContent = stor.oldest_tracking_date || "N/A";
+        if (elements.storageLatestDate) elements.storageLatestDate.textContent = stor.latest_tracking_date || "N/A";
+        if (elements.storageRetentionStatus) elements.storageRetentionStatus.textContent = stor.cleanup_status || "Active 7-Day Window";
+        if (elements.storageAvailMb) elements.storageAvailMb.textContent = `${(stor.available_mb || total - used).toFixed(2)} MB`;
+
+        // Populate Bus Filter in Storage Explorer if empty
+        if (elements.storageBusFilter && elements.storageBusFilter.options.length <= 1 && state.buses.length > 0) {
+            state.buses.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.bus_id;
+                opt.textContent = `${b.bus_id} (${b.bus_name})`;
+                elements.storageBusFilter.appendChild(opt);
+            });
         }
 
         const cat = stor.category_breakdown_mb || stor.categories_mb || {};
@@ -789,10 +813,22 @@ document.addEventListener("DOMContentLoaded", () => {
     function updateMapMarkers() {
         if (!elements.map) return;
 
+        let activeGpsCount = 0;
+
         state.buses.forEach(b => {
             const loc = b.current_location;
-            if (!loc || !loc.latitude || !loc.longitude) return;
+            const hasValidCoord = loc && loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.0001;
 
+            if (!hasValidCoord) {
+                // If a marker previously existed for this bus, remove it
+                if (state.busMarkers[b.bus_id]) {
+                    elements.map.removeLayer(state.busMarkers[b.bus_id]);
+                    delete state.busMarkers[b.bus_id];
+                }
+                return;
+            }
+
+            activeGpsCount++;
             const isSelected = (b.bus_id === state.selectedBusId);
             const latLng = [loc.latitude, loc.longitude];
             const icon = createBusMarkerIcon(b, isSelected);
@@ -806,12 +842,36 @@ document.addEventListener("DOMContentLoaded", () => {
                 state.busMarkers[b.bus_id] = marker;
             }
 
-            // Bind tooltip
+            // Rich popup displaying: Bus ID, Bus Number, Speed, Heading, Last Update
+            const popupHtml = `
+                <div class="bus-map-popup">
+                    <h4 style="margin:0 0 6px 0; font-size:14px; font-weight:700; color:var(--primary);">${escapeHtml(b.bus_name)} (${escapeHtml(b.bus_id)})</h4>
+                    <div style="font-size:12px; line-height:1.6;">
+                        <div><strong>Bus Number:</strong> ${escapeHtml(b.bus_number)}</div>
+                        <div><strong>ESP Device:</strong> ${escapeHtml(b.device_id || 'N/A')}</div>
+                        <div><strong>Speed:</strong> ${(loc.speed_kmh || 0).toFixed(1)} km/h</div>
+                        <div><strong>Heading:</strong> ${(loc.heading || 0).toFixed(0)}°</div>
+                        <div><strong>Last Update:</strong> ${loc.time ? escapeHtml(loc.time) : (b.last_communication || 'Just now')}</div>
+                        <div style="margin-top:4px;"><strong>Status:</strong> <span class="badge ${b.is_moving ? 'badge-success' : 'badge-secondary'}">${b.movement_status || (b.is_moving ? 'Moving' : 'Stopped')}</span></div>
+                    </div>
+                </div>
+            `;
+            state.busMarkers[b.bus_id].bindPopup(popupHtml);
             state.busMarkers[b.bus_id].bindTooltip(
-                `<strong>${escapeHtml(b.bus_name)}</strong><br>Speed: ${(loc.speed_kmh || 0).toFixed(1)} km/h<br>${b.is_reached_college ? "Reached College" : (b.is_moving ? "Moving" : "Stopped")}`,
+                `<strong>${escapeHtml(b.bus_name)}</strong> (${b.bus_id})<br>Speed: ${(loc.speed_kmh || 0).toFixed(1)} km/h`,
                 { direction: "top" }
             );
         });
+
+        // Toggle "Waiting for GPS data from ESP devices" empty state overlay
+        const emptyOverlay = document.getElementById("mapEmptyStateOverlay");
+        if (emptyOverlay) {
+            if (activeGpsCount === 0) {
+                emptyOverlay.classList.remove("hidden");
+            } else {
+                emptyOverlay.classList.add("hidden");
+            }
+        }
     }
 
     // Telemetry HUD Updating
@@ -1088,9 +1148,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const query = (state.fleetSearchQuery || "").toLowerCase().trim();
 
         const filtered = state.buses.filter(b => {
-            if (state.fleetFilter === "running" && !b.is_moving) return false;
-            if (state.fleetFilter === "reached_college" && !b.is_reached_college) return false;
+            if (state.fleetFilter === "online" && !b.is_online) return false;
             if (state.fleetFilter === "offline" && b.is_online) return false;
+            if (state.fleetFilter === "moving" && !b.is_moving) return false;
+            if (state.fleetFilter === "stopped" && (!b.is_online || b.is_moving)) return false;
 
             if (query) {
                 const matchName = (b.bus_name || "").toLowerCase().includes(query);
@@ -1107,25 +1168,41 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (filtered.length === 0) {
-            elements.fleetTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:24px;">No buses found</td></tr>`;
+            elements.fleetTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:24px;">No buses found for this filter</td></tr>`;
             return;
         }
 
         elements.fleetTableBody.innerHTML = filtered.map(b => {
-            const statusClass = b.is_reached_college ? "reached_college" : (b.is_moving ? "moving" : (b.is_online ? "stopped" : "offline"));
-            const statusLabel = b.is_reached_college ? "Reached College" : (b.is_moving ? "Running" : (b.is_online ? "Stopped" : "Offline"));
-            const dm = b.distance_metrics || {};
+            const isOnline = !!b.is_online;
+            const isMoving = !!b.is_moving;
+            const statusClass = b.is_reached_college ? "reached_college" : (isOnline ? (isMoving ? "moving" : "stopped") : "offline");
+            const statusLabel = b.is_reached_college ? "Reached College" : (isOnline ? (isMoving ? "Moving" : "Stopped") : "Offline");
+
+            const hasGps = b.current_location && b.current_location.latitude && b.current_location.longitude && Math.abs(b.current_location.latitude) > 0.0001;
+            const gpsBadge = hasGps 
+                ? `<span class="badge badge-success"><i class="fa-solid fa-satellite"></i> GPS Available</span>`
+                : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;"><i class="fa-solid fa-hourglass-half"></i> Waiting for GPS data</span>`;
+
+            const coordsText = hasGps 
+                ? `<code class="mono" style="font-size:12px;">${roundCoord(b.current_location.latitude)}, ${roundCoord(b.current_location.longitude)}</code>`
+                : `<span class="text-muted" style="font-size:12px;"><i class="fa-solid fa-hourglass-half"></i> Waiting for GPS data</span>`;
+
+            const lastComm = b.last_communication || (b.current_location && b.current_location.time ? b.current_location.time : "Never");
 
             return `
                 <tr>
                     <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
-                    <td><strong>${escapeHtml(b.bus_name)}</strong><br><small class="text-muted font-mono">${b.bus_id}</small></td>
-                    <td><span class="mono">${escapeHtml(b.bus_number)}</span></td>
-                    <td><code>${escapeHtml(b.device_id)}</code></td>
-                    <td>${escapeHtml(b.route_name)}</td>
-                    <td>${escapeHtml(b.driver_name || "Unassigned")}<br><small class="text-muted">${escapeHtml(b.driver_phone || "N/A")}</small></td>
-                    <td><strong class="text-success">${(dm.daily_distance_km || 0.0).toFixed(1)} km</strong></td>
-                    <td>${b.current_location ? b.current_location.time : "Never"}</td>
+                    <td><strong class="mono" style="color:var(--primary); font-size:13px;">${escapeHtml(b.bus_id)}</strong><br><span style="font-weight:600;">${escapeHtml(b.bus_name)}</span></td>
+                    <td><span class="mono" style="font-weight:600;">${escapeHtml(b.bus_number)}</span></td>
+                    <td>
+                        <code>${escapeHtml(b.device_id)}</code><br>
+                        <span class="badge ${isOnline ? 'badge-success' : 'badge-secondary'}" style="font-size:11px; margin-top:2px;">
+                            ${isOnline ? '<i class="fa-solid fa-wifi"></i> Connected' : '<i class="fa-solid fa-plug-circle-xmark"></i> Disconnected'}
+                        </span>
+                    </td>
+                    <td>${gpsBadge}</td>
+                    <td>${coordsText}</td>
+                    <td><span class="text-muted font-mono" style="font-size:12px;">${escapeHtml(lastComm)}</span></td>
                     <td>
                         <div class="table-actions">
                             <button class="btn btn-outline btn-xs" onclick="window.trackBusOnMap('${b.bus_id}')" title="Live Track on Map">
@@ -1181,6 +1258,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderRoutesCards() {
         if (!elements.routesCardsGrid) return;
+        if (!state.routes || state.routes.length === 0) {
+            elements.routesCardsGrid.innerHTML = `
+                <div class="empty-routes-card">
+                    <div class="empty-icon"><i class="fa-solid fa-route"></i></div>
+                    <h3>No routes created yet.</h3>
+                    <p>Create custom transit routes and assign intermediate bus stops to your fleet.</p>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnEmptyCreateRoute"><i class="fa-solid fa-plus"></i> Create Route</button>
+                </div>
+            `;
+            const btnEmpty = document.getElementById("btnEmptyCreateRoute");
+            if (btnEmpty) {
+                btnEmpty.addEventListener("click", () => {
+                    if (elements.routeCreateCard) {
+                        elements.routeCreateCard.classList.remove("hidden");
+                        elements.routeCreateCard.scrollIntoView({ behavior: "smooth" });
+                    }
+                });
+            }
+            return;
+        }
+
         elements.routesCardsGrid.innerHTML = state.routes.map(r => {
             const waypointsCount = (r.waypoints || []).length;
             const stopsCount = (r.stops || []).length;
@@ -1193,7 +1291,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="route-path-flow">
                         <div class="route-path-step"><i class="fa-solid fa-circle-dot text-primary"></i> Origin: ${escapeHtml(r.origin_name || "Transit Terminal")}</div>
                         <div class="route-path-step"><i class="fa-solid fa-map-pin text-info"></i> Intermediate Stops: <strong>${stopsCount} stops</strong></div>
-                        <div class="route-path-step"><i class="fa-solid fa-graduation-cap text-success"></i> Destination: Sphoorthy Campus Terminal</div>
+                        <div class="route-path-step"><i class="fa-solid fa-graduation-cap text-success"></i> Destination: ${escapeHtml(r.destination_name || "Campus Terminal")}</div>
                     </div>
                     <div class="route-card-footer">
                         <span class="text-muted"><i class="fa-solid fa-route"></i> ${waypointsCount} waypoints</span>
@@ -1204,28 +1302,38 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join("");
     }
 
-    // Geocoding Origin Search
+    // Geocoding Search (debounced location autocomplete)
     async function searchGeocodeLocation(query, suggestionsBox, onSelectCallback) {
-        if (!query || query.length < 2) return;
+        if (!query || query.length < 2) {
+            suggestionsBox.classList.add("hidden");
+            return;
+        }
         try {
-            suggestionsBox.innerHTML = `<div class="geocoding-item text-muted">Searching locations...</div>`;
+            suggestionsBox.innerHTML = `<div class="geocoding-item text-muted"><i class="fa-solid fa-spinner fa-spin"></i> Searching locations...</div>`;
             suggestionsBox.classList.remove("hidden");
 
             const resp = await fetch(`/api/routes/geocode?q=${encodeURIComponent(query)}`);
             if (!resp.ok) throw new Error("Geocoding failed");
-            const results = await resp.json();
+            const data = await resp.json();
+            const results = Array.isArray(data) ? data : (data.suggestions || data.results || []);
 
             if (!results || results.length === 0) {
-                suggestionsBox.innerHTML = `<div class="geocoding-item text-muted">No locations found</div>`;
+                suggestionsBox.innerHTML = `<div class="geocoding-item text-muted">No locations found for "${escapeHtml(query)}"</div>`;
                 return;
             }
 
-            suggestionsBox.innerHTML = results.slice(0, 5).map(res => `
-                <div class="geocoding-item" data-lat="${res.lat}" data-lng="${res.lon}" data-name="${escapeHtml(res.display_name)}">
-                    <i class="fa-solid fa-location-dot"></i> <strong>${escapeHtml(res.display_name.split(",")[0])}</strong><br>
-                    <small class="text-muted">${escapeHtml(res.display_name)}</small>
-                </div>
-            `).join("");
+            suggestionsBox.innerHTML = results.slice(0, 5).map(res => {
+                const lat = res.lat || res.latitude;
+                const lon = res.lon || res.lng || res.longitude;
+                const name = res.display_name || res.name || query;
+                const mainName = name.split(",")[0];
+                return `
+                    <div class="geocoding-item" data-lat="${lat}" data-lng="${lon}" data-name="${escapeHtml(name)}">
+                        <i class="fa-solid fa-location-dot" style="color:var(--primary); margin-right:6px;"></i> <strong>${escapeHtml(mainName)}</strong><br>
+                        <small class="text-muted" style="font-size:11px;">${escapeHtml(name)}</small>
+                    </div>
+                `;
+            }).join("");
 
             suggestionsBox.querySelectorAll(".geocoding-item").forEach(item => {
                 item.addEventListener("click", () => {
@@ -1236,6 +1344,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     onSelectCallback(lat, lng, name);
                 });
             });
+        } catch (err) {
+            console.error("Geocoding error:", err);
+            suggestionsBox.innerHTML = `<div class="geocoding-item text-danger">Search error</div>`;
+        }
+    }
         } catch (err) {
             console.error("Geocoding error:", err);
             suggestionsBox.classList.add("hidden");
@@ -1328,6 +1441,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (data.status === "success" && data.college) {
                 state.collegeConfig = data.college;
                 if (elements.collegeNameInput) elements.collegeNameInput.value = data.college.college_name || "";
+                if (elements.collegeAddressInput) elements.collegeAddressInput.value = data.college.college_address || "";
+                if (elements.campusDetailsInput) elements.campusDetailsInput.value = data.college.campus_details || "";
                 if (elements.collegeRadiusInput) elements.collegeRadiusInput.value = data.college.geofence_radius_meters || 120;
                 if (elements.collegeLatInput) elements.collegeLatInput.value = roundCoord(data.college.latitude);
                 if (elements.collegeLngInput) elements.collegeLngInput.value = roundCoord(data.college.longitude);
@@ -1425,6 +1540,54 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (err) {
             console.error("Fetch storage error:", err);
         }
+    }
+
+    async function loadStorageRecords() {
+        const busId = elements.storageBusFilter ? elements.storageBusFilter.value : "";
+        const date = elements.storageDateFilter ? elements.storageDateFilter.value : "";
+        let url = `/api/admin/storage/records?limit=100`;
+        if (busId) url += `&bus_id=${encodeURIComponent(busId)}`;
+        if (date) url += `&date=${encodeURIComponent(date)}`;
+
+        try {
+            if (elements.storageRecordsTableBody) {
+                elements.storageRecordsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:20px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading records...</td></tr>`;
+            }
+            const resp = await fetch(url);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            renderStorageRecordsTable(data.records || []);
+        } catch (err) {
+            console.error("Storage records fetch error:", err);
+            if (elements.storageRecordsTableBody) {
+                elements.storageRecordsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding:20px;">Failed to load records</td></tr>`;
+            }
+        }
+    }
+
+    function renderStorageRecordsTable(records) {
+        loadedStorageRecords = records || [];
+        if (!elements.storageRecordsTableBody) return;
+        if (elements.chkSelectAllStorageRecords) elements.chkSelectAllStorageRecords.checked = false;
+
+        if (!records || records.length === 0) {
+            elements.storageRecordsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:24px;">No tracking records found for the selected filter</td></tr>`;
+            return;
+        }
+
+        elements.storageRecordsTableBody.innerHTML = records.map((r, idx) => `
+            <tr>
+                <td style="text-align: center;">
+                    <input type="checkbox" class="storage-record-chk" data-index="${idx}" data-bus="${escapeHtml(r.bus_id || '')}" data-date="${escapeHtml(r.date || '')}" data-orig-idx="${r.original_index !== undefined ? r.original_index : idx}">
+                </td>
+                <td class="font-mono text-muted" style="font-size:12px;">${escapeHtml(r.timestamp || r.time || "N/A")}</td>
+                <td><strong class="mono text-primary">${escapeHtml(r.bus_id || "")}</strong></td>
+                <td class="font-mono">${r.latitude ? roundCoord(r.latitude) : "--"}</td>
+                <td class="font-mono">${r.longitude ? roundCoord(r.longitude) : "--"}</td>
+                <td><span class="badge badge-info">${(r.speed_kmh || 0).toFixed(1)} km/h</span></td>
+                <td><code>${escapeHtml(r.device_id || "N/A")}</code></td>
+            </tr>
+        `).join("");
     }
 
     // ==========================================
@@ -1631,15 +1794,42 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Dashboard Quick Buttons
+    // Dashboard Quick Buttons & Action Cards
     if (elements.btnDashboardToMap) {
         elements.btnDashboardToMap.addEventListener("click", () => switchView("live-tracking"));
     }
     if (elements.btnViewAllBuses) {
         elements.btnViewAllBuses.addEventListener("click", () => switchView("buses"));
     }
+    if (elements.cardNavBuses) {
+        elements.cardNavBuses.addEventListener("click", () => switchView("buses"));
+    }
+    if (elements.cardNavMap) {
+        elements.cardNavMap.addEventListener("click", () => switchView("live-tracking"));
+    }
+    if (elements.cardNavRoutes) {
+        elements.cardNavRoutes.addEventListener("click", () => switchView("routes"));
+    }
+    if (elements.cardNavStorage) {
+        elements.cardNavStorage.addEventListener("click", () => switchView("storage"));
+    }
+
+    // Register Bus Modal Triggers
     if (elements.btnFleetRegisterBus) {
-        elements.btnFleetRegisterBus.addEventListener("click", () => switchView("register-bus"));
+        elements.btnFleetRegisterBus.addEventListener("click", () => {
+            populateRegisterBusDropdowns();
+            if (elements.registerBusModal) elements.registerBusModal.classList.remove("hidden");
+        });
+    }
+    if (elements.closeRegisterBusModalBtn) {
+        elements.closeRegisterBusModalBtn.addEventListener("click", () => {
+            if (elements.registerBusModal) elements.registerBusModal.classList.add("hidden");
+        });
+    }
+    if (elements.btnCancelRegisterModal) {
+        elements.btnCancelRegisterModal.addEventListener("click", () => {
+            if (elements.registerBusModal) elements.registerBusModal.classList.add("hidden");
+        });
     }
 
     // Live Tracking Bus Search
@@ -1912,7 +2102,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (elements.btnGeocodeOrigin && elements.routeOriginInput && elements.originSuggestionsBox) {
         elements.btnGeocodeOrigin.addEventListener("click", () => {
-            searchGeocodeLocation(elements.routeOriginInput.value, elements.originSuggestionsBox, (lat, lng, name) => {
+            searchGeocodeLocation(elements.routeOriginInput.value.trim(), elements.originSuggestionsBox, (lat, lng, name) => {
                 confirmedOriginCoords = { lat, lng };
                 elements.routeOriginInput.value = name.split(",")[0];
                 if (elements.originConfirmedPill) {
@@ -1923,10 +2113,50 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (elements.routeOriginInput && elements.originSuggestionsBox) {
+        elements.routeOriginInput.addEventListener("input", debounce((e) => {
+            searchGeocodeLocation(e.target.value.trim(), elements.originSuggestionsBox, (lat, lng, name) => {
+                confirmedOriginCoords = { lat, lng };
+                elements.routeOriginInput.value = name.split(",")[0];
+                if (elements.originConfirmedPill) {
+                    elements.originConfirmedPill.classList.remove("hidden");
+                    if (elements.originCoordsText) elements.originCoordsText.textContent = `${roundCoord(lat)}, ${roundCoord(lng)}`;
+                }
+            });
+        }, 250));
+    }
+
+    // Destination Autocomplete
+    if (elements.btnGeocodeDest && elements.routeDestInput && elements.destSuggestionsBox) {
+        elements.btnGeocodeDest.addEventListener("click", () => {
+            searchGeocodeLocation(elements.routeDestInput.value.trim(), elements.destSuggestionsBox, (lat, lng, name) => {
+                confirmedDestCoords = { lat, lng };
+                elements.routeDestInput.value = name.split(",")[0];
+                if (elements.destConfirmedPill) {
+                    elements.destConfirmedPill.classList.remove("hidden");
+                    if (elements.destCoordsText) elements.destCoordsText.textContent = `${roundCoord(lat)}, ${roundCoord(lng)}`;
+                }
+            });
+        });
+    }
+
+    if (elements.routeDestInput && elements.destSuggestionsBox) {
+        elements.routeDestInput.addEventListener("input", debounce((e) => {
+            searchGeocodeLocation(e.target.value.trim(), elements.destSuggestionsBox, (lat, lng, name) => {
+                confirmedDestCoords = { lat, lng };
+                elements.routeDestInput.value = name.split(",")[0];
+                if (elements.destConfirmedPill) {
+                    elements.destConfirmedPill.classList.remove("hidden");
+                    if (elements.destCoordsText) elements.destCoordsText.textContent = `${roundCoord(lat)}, ${roundCoord(lng)}`;
+                }
+            });
+        }, 250));
+    }
+
     // Route Management Stops Search
     if (elements.btnAddStopSearch && elements.routeStopSearchInput && elements.stopSuggestionsBox) {
         elements.btnAddStopSearch.addEventListener("click", () => {
-            searchGeocodeLocation(elements.routeStopSearchInput.value, elements.stopSuggestionsBox, (lat, lng, name) => {
+            searchGeocodeLocation(elements.routeStopSearchInput.value.trim(), elements.stopSuggestionsBox, (lat, lng, name) => {
                 const stopName = name.split(",")[0];
                 currentNewRouteStops.push({ name: stopName, latitude: lat, longitude: lng });
                 renderSelectedStopsList();
@@ -1934,6 +2164,26 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
     }
+
+    if (elements.routeStopSearchInput && elements.stopSuggestionsBox) {
+        elements.routeStopSearchInput.addEventListener("input", debounce((e) => {
+            searchGeocodeLocation(e.target.value.trim(), elements.stopSuggestionsBox, (lat, lng, name) => {
+                const stopName = name.split(",")[0];
+                currentNewRouteStops.push({ name: stopName, latitude: lat, longitude: lng });
+                renderSelectedStopsList();
+                elements.routeStopSearchInput.value = "";
+            });
+        }, 250));
+    }
+
+    // Dismiss suggestions on outside click
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".search-input-wrapper")) {
+            if (elements.originSuggestionsBox) elements.originSuggestionsBox.classList.add("hidden");
+            if (elements.destSuggestionsBox) elements.destSuggestionsBox.classList.add("hidden");
+            if (elements.stopSuggestionsBox) elements.stopSuggestionsBox.classList.add("hidden");
+        }
+    });
 
     function renderSelectedStopsList() {
         if (!elements.selectedStopsList) return;
@@ -1959,18 +2209,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const originLat = confirmedOriginCoords ? confirmedOriginCoords.lat : 17.3850;
             const originLng = confirmedOriginCoords ? confirmedOriginCoords.lng : 78.4866;
+            const destLat = confirmedDestCoords ? confirmedDestCoords.lat : (state.collegeConfig ? state.collegeConfig.latitude : 17.3156);
+            const destLng = confirmedDestCoords ? confirmedDestCoords.lng : (state.collegeConfig ? state.collegeConfig.longitude : 78.5833);
+            const destName = elements.routeDestInput ? elements.routeDestInput.value.trim() : "Sphoorthy Engineering College";
 
             const waypoints = [
                 { lat: originLat, lng: originLng },
                 ...currentNewRouteStops.map(s => ({ lat: s.latitude, lng: s.longitude })),
-                { lat: state.collegeConfig ? state.collegeConfig.latitude : 17.3156, lng: state.collegeConfig ? state.collegeConfig.longitude : 78.5833 }
+                { lat: destLat, lng: destLng }
             ];
 
             const payload = {
                 route_name: routeName,
                 route_code: routeCode || `R${state.routes.length + 1}`,
                 origin_name: elements.routeOriginInput.value.trim() || "Transit Terminal",
-                destination_name: "Sphoorthy Engineering College Main Terminal",
+                destination_name: destName || "Sphoorthy Engineering College",
                 stops: currentNewRouteStops,
                 waypoints: waypoints
             };
@@ -1986,7 +2239,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     showToast(`Route '${routeName}' created!`, "success");
                     elements.routeForm.reset();
                     currentNewRouteStops = [];
+                    confirmedOriginCoords = null;
+                    confirmedDestCoords = null;
                     renderSelectedStopsList();
+                    if (elements.originConfirmedPill) elements.originConfirmedPill.classList.add("hidden");
+                    if (elements.destConfirmedPill) elements.destConfirmedPill.classList.add("hidden");
                     if (elements.routeCreateCard) elements.routeCreateCard.classList.add("hidden");
                     fetchRoutes();
                 } else {
@@ -2018,6 +2275,8 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault();
             const payload = {
                 college_name: elements.collegeNameInput.value.trim(),
+                college_address: elements.collegeAddressInput ? elements.collegeAddressInput.value.trim() : "",
+                campus_details: elements.campusDetailsInput ? elements.campusDetailsInput.value.trim() : "",
                 geofence_radius_meters: parseInt(elements.collegeRadiusInput.value),
                 latitude: parseFloat(elements.collegeLatInput.value),
                 longitude: parseFloat(elements.collegeLngInput.value)
@@ -2054,12 +2313,85 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (resp.ok && data.status === "success") {
                     showToast("7-day cleanup & backup completed successfully!", "success");
                     fetchStorageMetrics();
+                    loadStorageRecords();
                     fetchDashboard();
                 } else {
                     showToast(data.message || "Cleanup failed", "error");
                 }
             } catch (err) {
                 showToast("Cleanup error", "error");
+            }
+        });
+    }
+
+    // Storage Records Explorer Controls
+    if (elements.btnFilterStorageRecords) {
+        elements.btnFilterStorageRecords.addEventListener("click", () => {
+            loadStorageRecords();
+        });
+    }
+
+    if (elements.chkSelectAllStorageRecords) {
+        elements.chkSelectAllStorageRecords.addEventListener("change", (e) => {
+            const chks = document.querySelectorAll(".storage-record-chk");
+            chks.forEach(c => c.checked = e.target.checked);
+        });
+    }
+
+    if (elements.btnDeleteSelectedRecords) {
+        elements.btnDeleteSelectedRecords.addEventListener("click", () => {
+            const selectedChks = document.querySelectorAll(".storage-record-chk:checked");
+            if (selectedChks.length === 0) {
+                showToast("Please select at least one record to delete", "info");
+                return;
+            }
+            pendingDeleteItems = Array.from(selectedChks).map(c => ({
+                bus_id: c.dataset.bus,
+                date: c.dataset.date,
+                orig_idx: parseInt(c.dataset.origIdx)
+            }));
+
+            if (elements.deleteRecordsCountText) elements.deleteRecordsCountText.textContent = pendingDeleteItems.length;
+            if (elements.storageDeleteConfirmModal) elements.storageDeleteConfirmModal.classList.remove("hidden");
+        });
+    }
+
+    if (elements.closeDeleteConfirmModalBtn) {
+        elements.closeDeleteConfirmModalBtn.addEventListener("click", () => {
+            if (elements.storageDeleteConfirmModal) elements.storageDeleteConfirmModal.classList.add("hidden");
+        });
+    }
+    if (elements.btnCancelDeleteRecords) {
+        elements.btnCancelDeleteRecords.addEventListener("click", () => {
+            if (elements.storageDeleteConfirmModal) elements.storageDeleteConfirmModal.classList.add("hidden");
+        });
+    }
+
+    if (elements.btnConfirmDeleteRecords) {
+        elements.btnConfirmDeleteRecords.addEventListener("click", async () => {
+            if (elements.storageDeleteConfirmModal) elements.storageDeleteConfirmModal.classList.add("hidden");
+            if (pendingDeleteItems.length === 0) return;
+
+            const busId = pendingDeleteItems[0].bus_id;
+            const date = pendingDeleteItems[0].date;
+            const indices = pendingDeleteItems.map(p => p.orig_idx);
+
+            try {
+                const resp = await fetch("/api/admin/storage/delete-records", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ bus_id: busId, date: date, indices: indices })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === "success") {
+                    showToast(data.message || `Deleted ${pendingDeleteItems.length} records`, "success");
+                    loadStorageRecords();
+                    fetchStorageMetrics();
+                } else {
+                    showToast(data.message || "Failed to delete records", "error");
+                }
+            } catch (err) {
+                showToast("Delete records error", "error");
             }
         });
     }

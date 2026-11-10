@@ -80,20 +80,17 @@
             </div>
         </header>
 
-        <!-- 10-SECTION PRIMARY NAVIGATION BAR -->
+        <!-- 7-SECTION PRIMARY NAVIGATION BAR -->
         <nav class="main-nav-bar">
             <div class="nav-links-scroll">
                 <button class="nav-link-btn active" data-view="dashboard">
                     <i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span>
                 </button>
-                <button class="nav-link-btn" data-view="live-tracking">
-                    <i class="fa-solid fa-map-location-dot"></i> <span>Live Bus Tracking</span>
-                </button>
                 <button class="nav-link-btn" data-view="buses">
                     <i class="fa-solid fa-bus"></i> <span>Buses</span> <span class="nav-counter" id="navBusesCount">30</span>
                 </button>
-                <button class="nav-link-btn" data-view="register-bus">
-                    <i class="fa-solid fa-plus-circle"></i> <span>Register Bus</span>
+                <button class="nav-link-btn" data-view="live-tracking">
+                    <i class="fa-solid fa-map-location-dot"></i> <span>Live Bus Tracking</span>
                 </button>
                 <button class="nav-link-btn" data-view="routes">
                     <i class="fa-solid fa-route"></i> <span>Route Management</span>
@@ -104,14 +101,8 @@
                 <button class="nav-link-btn" data-view="college-settings">
                     <i class="fa-solid fa-graduation-cap"></i> <span>College Settings</span>
                 </button>
-                <button class="nav-link-btn" data-view="devices">
-                    <i class="fa-solid fa-microchip"></i> <span>Device Management</span>
-                </button>
                 <button class="nav-link-btn" data-view="storage">
                     <i class="fa-solid fa-hard-drive"></i> <span>Storage Management</span>
-                </button>
-                <button class="nav-link-btn" data-view="security">
-                    <i class="fa-solid fa-shield-halved"></i> <span>Security Settings</span>
                 </button>
             </div>
         </nav>
@@ -255,31 +246,37 @@
                     </div>
                 </div>
 
-                <!-- Quick Fleet Running Table -->
+                <!-- Clean System Quick Actions -->
                 <div class="content-box" style="margin-top: 20px;">
                     <div class="content-box-header">
-                        <h3><i class="fa-solid fa-bus-simple"></i> Live Fleet Status Snapshot</h3>
-                        <button class="btn btn-outline btn-sm" id="btnViewAllBuses">View All 30 Buses <i class="fa-solid fa-arrow-right"></i></button>
+                        <h3><i class="fa-solid fa-bolt"></i> Fleet Quick Navigation</h3>
+                        <span class="badge badge-info">30 Registered Buses</span>
                     </div>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Status</th>
-                                    <th>Bus Name & ID</th>
-                                    <th>License Plate</th>
-                                    <th>ESP Device</th>
-                                    <th>Speed</th>
-                                    <th>Current Status</th>
-                                    <th>Trip Distance</th>
-                                    <th>Daily Distance</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dashFleetTableBody">
-                                <!-- Populated dynamically -->
-                            </tbody>
-                        </table>
+                    <div class="quick-nav-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 16px;">
+                        <div class="quick-nav-card" id="cardNavBuses" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
+                            <div style="font-size: 24px; color: var(--primary); margin-bottom: 8px;"><i class="fa-solid fa-bus"></i></div>
+                            <h4 style="margin-bottom: 4px; font-weight: 700;">Fleet Bus Management</h4>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">View all 30 buses, connection statuses, and GPS telemetry.</p>
+                            <span class="btn btn-outline btn-xs">Open Buses <i class="fa-solid fa-arrow-right"></i></span>
+                        </div>
+                        <div class="quick-nav-card" id="cardNavMap" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
+                            <div style="font-size: 24px; color: var(--success); margin-bottom: 8px;"><i class="fa-solid fa-map-location-dot"></i></div>
+                            <h4 style="margin-bottom: 4px; font-weight: 700;">Live Bus Tracking Map</h4>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Real-time GPS telemetry from active hardware ESP devices.</p>
+                            <span class="btn btn-outline btn-xs">Open Map <i class="fa-solid fa-arrow-right"></i></span>
+                        </div>
+                        <div class="quick-nav-card" id="cardNavRoutes" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
+                            <div style="font-size: 24px; color: #8b5cf6; margin-bottom: 8px;"><i class="fa-solid fa-route"></i></div>
+                            <h4 style="margin-bottom: 4px; font-weight: 700;">Route Management</h4>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Create custom corridors with destination & geocoding search.</p>
+                            <span class="btn btn-outline btn-xs">Open Routes <i class="fa-solid fa-arrow-right"></i></span>
+                        </div>
+                        <div class="quick-nav-card" id="cardNavStorage" style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;">
+                            <div style="font-size: 24px; color: #f59e0b; margin-bottom: 8px;"><i class="fa-solid fa-hard-drive"></i></div>
+                            <h4 style="margin-bottom: 4px; font-weight: 700;">Storage Optimization</h4>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Monitor 300 MB limit, inspect records & run 7-day cleanup.</p>
+                            <span class="btn btn-outline btn-xs">Open Storage <i class="fa-solid fa-arrow-right"></i></span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -342,6 +339,13 @@
                     <!-- Right Panel: Live Map & Telemetry HUD -->
                     <section class="live-map-panel" id="liveMapPanel">
                         <div id="map"></div>
+
+                        <!-- Waiting for GPS data from ESP devices Overlay -->
+                        <div class="map-empty-state-overlay" id="mapEmptyStateOverlay">
+                            <div class="empty-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+                            <h3>Waiting for GPS data from ESP devices</h3>
+                            <p>Real-time telemetry will appear when your ESP8266 / ESP32 hardware transmits coordinates. No simulated bus markers are active.</p>
+                        </div>
 
                         <!-- Telemetry HUD Card -->
                         <div class="telemetry-hud-card" id="telemetryHudCard">
@@ -525,119 +529,38 @@
                 <div class="content-toolbar">
                     <div class="search-input-wrapper" style="max-width: 380px;">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="fleetSearchInput" placeholder="Filter by bus name, license, driver, route...">
+                        <input type="text" id="fleetSearchInput" placeholder="Filter by bus name, ID, license, device...">
                     </div>
                     <div class="quick-status-tabs" id="fleetStatusTabs">
                         <button class="status-tab-btn active" data-fleet-filter="all">All (<span id="fleetCountAll">30</span>)</button>
-                        <button class="status-tab-btn" data-fleet-filter="running">Running (<span id="fleetCountRunning">0</span>)</button>
-                        <button class="status-tab-btn" data-fleet-filter="reached_college">Reached College (<span id="fleetCountCollege">0</span>)</button>
-                        <button class="status-tab-btn" data-fleet-filter="offline">Offline (<span id="fleetCountOffline">0</span>)</button>
+                        <button class="status-tab-btn" data-fleet-filter="online">Online (<span id="fleetCountOnline">0</span>)</button>
+                        <button class="status-tab-btn" data-fleet-filter="offline">Offline (<span id="fleetCountOffline">30</span>)</button>
+                        <button class="status-tab-btn" data-fleet-filter="moving">Moving (<span id="fleetCountMoving">0</span>)</button>
+                        <button class="status-tab-btn" data-fleet-filter="stopped">Stopped (<span id="fleetCountStopped">0</span>)</button>
                     </div>
                 </div>
 
-                <!-- Complete Fleet Table -->
+                <!-- Complete Fleet Table with All 30 Buses -->
                 <div class="content-box">
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Status</th>
-                                    <th>Bus Name & ID</th>
+                                    <th>Bus ID & Name</th>
                                     <th>License Number</th>
                                     <th>Assigned ESP Device</th>
-                                    <th>Assigned Route</th>
-                                    <th>Driver & Phone</th>
-                                    <th>Distance Today</th>
-                                    <th>Last Ping</th>
+                                    <th>GPS Status</th>
+                                    <th>Latest Latitude & Longitude</th>
+                                    <th>Last Communication</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="fleetTableBody">
-                                <!-- Populated dynamically -->
+                                <!-- Populated dynamically with all 30 registered buses -->
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </section>
-
-            <!-- ================================================================ -->
-            <!-- VIEW 4: REGISTER BUS (Simple Bus Registration Form) -->
-            <!-- ================================================================ -->
-            <section class="app-view" id="viewRegisterBus">
-                <div class="view-header-row">
-                    <div>
-                        <h2><i class="fa-solid fa-plus-circle"></i> Register New Bus</h2>
-                        <p class="section-desc">Connect a new bus to the tracking system and map its dedicated ESP8266 / ESP32 hardware device</p>
-                    </div>
-                </div>
-
-                <div class="form-container-card">
-                    <form id="dedicatedRegisterBusForm">
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="regBusName">Bus Name <span class="required">*</span></label>
-                                <input type="text" id="regBusName" placeholder="e.g. Campus Express 31" required>
-                                <span class="form-help">Descriptive label shown on dashboards and tracking HUD</span>
-                            </div>
-                            <div class="form-group">
-                                <label for="regBusId">Bus ID <span class="required">*</span></label>
-                                <input type="text" id="regBusId" placeholder="e.g. BUS-31" required style="text-transform:uppercase;">
-                                <span class="form-help">Unique fleet identifier (e.g. BUS-01 to BUS-30)</span>
-                            </div>
-                        </div>
-
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="regBusNumber">License Number <span class="required">*</span></label>
-                                <input type="text" id="regBusNumber" placeholder="e.g. TS 09 UB 1031" required style="text-transform:uppercase;">
-                                <span class="form-help">Official vehicle registration license number</span>
-                            </div>
-                            <div class="form-group">
-                                <label for="regDeviceId">ESP Device ID <span class="required">*</span></label>
-                                <div style="display: flex; gap: 8px;">
-                                    <input type="text" id="regDeviceId" placeholder="e.g. AIV-DEV-031" required style="text-transform:uppercase; flex: 1;">
-                                    <select id="regDeviceSelect" class="form-select" style="max-width: 180px;" title="Select from unassigned detected devices">
-                                        <option value="">-- Pick Device --</option>
-                                    </select>
-                                </div>
-                                <span class="form-help">Select an unassigned detected device or enter a new device ID</span>
-                            </div>
-                        </div>
-
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="regDriverName">Driver Name <span class="required">*</span></label>
-                                <input type="text" id="regDriverName" placeholder="e.g. Ramesh Kumar" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="regDriverPhone">Driver Phone Number <span class="required">*</span></label>
-                                <input type="text" id="regDriverPhone" placeholder="e.g. +91 98480 11031" required>
-                            </div>
-                        </div>
-
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="regRouteSelect">Assigned Route <span class="required">*</span></label>
-                                <select id="regRouteSelect" class="form-select" required>
-                                    <!-- Populated dynamically -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="regCollegeDest">College Destination</label>
-                                <input type="text" id="regCollegeDest" value="Sphoorthy Engineering College" readonly class="input-readonly">
-                                <span class="form-help text-muted">Configured destination. Campus group is not required.</span>
-                            </div>
-                        </div>
-
-                        <div class="form-actions-bar">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fa-solid fa-save"></i> Register Bus & ESP Device
-                            </button>
-                            <button type="reset" class="btn btn-outline" id="btnResetRegisterForm">
-                                Reset Form
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </section>
 
@@ -700,10 +623,18 @@
                             </div>
                         </div>
 
-                        <!-- College Destination -->
+                        <!-- Destination with Geocoding Autocomplete -->
                         <div class="form-group">
-                            <label for="routeDestInput">Final Destination / College</label>
-                            <input type="text" id="routeDestInput" value="Sphoorthy Engineering College Main Terminal" readonly class="input-readonly">
+                            <label for="routeDestInput">Destination (Automatic Geocoding) <span class="required">*</span></label>
+                            <div class="search-input-wrapper">
+                                <i class="fa-solid fa-flag-checkered search-icon"></i>
+                                <input type="text" id="routeDestInput" placeholder="Type destination (e.g. Sphoorthy Engineering College, Secunderabad, Hyderabad)..." autocomplete="off" value="Sphoorthy Engineering College">
+                                <button type="button" class="btn btn-sm btn-primary geocode-search-btn" id="btnGeocodeDest">Search</button>
+                            </div>
+                            <div class="geocoding-suggestions hidden" id="destSuggestionsBox"></div>
+                            <div class="confirmed-coords-pill" id="destConfirmedPill">
+                                <i class="fa-solid fa-circle-check"></i> <span id="destCoordsText">17.3156, 78.5833</span>
+                            </div>
                         </div>
 
                         <div class="form-actions-bar">
@@ -821,6 +752,19 @@
 
                         <div class="form-grid-2">
                             <div class="form-group">
+                                <label for="collegeAddressInput">College Address</label>
+                                <input type="text" id="collegeAddressInput" placeholder="e.g. Sagar Road, Nadargul Village, Balapur Mandal, Hyderabad, Telangana 501510">
+                                <span class="form-help">Official campus physical location</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="campusDetailsInput">Campus Details / Terminal</label>
+                                <input type="text" id="campusDetailsInput" placeholder="e.g. Main Gate Terminal, Bus Bay 1-4">
+                                <span class="form-help">Arrival bay and drop-off facility details</span>
+                            </div>
+                        </div>
+
+                        <div class="form-grid-2">
+                            <div class="form-group">
                                 <label for="collegeLatInput">College Latitude <span class="required">*</span></label>
                                 <input type="number" step="0.000001" id="collegeLatInput" value="17.315600" required>
                             </div>
@@ -848,77 +792,13 @@
             </section>
 
             <!-- ================================================================ -->
-            <!-- VIEW 8: DEVICE MANAGEMENT (ESP8266 & ESP32 Trackers) -->
-            <!-- ================================================================ -->
-            <section class="app-view" id="viewDevices">
-                <div class="view-header-row">
-                    <div>
-                        <h2><i class="fa-solid fa-microchip"></i> Universal Device Management</h2>
-                        <p class="section-desc">Hardware tracker registration, auto-discovery, GPS diagnostics, and 1-to-1 bus mapping</p>
-                    </div>
-                </div>
-
-                <!-- Device Metrics Quick Summary -->
-                <div class="device-summary-cards">
-                    <div class="device-stat-pill">
-                        <span class="stat-label">Total Devices</span>
-                        <strong class="stat-value" id="devTotalCount">30</strong>
-                    </div>
-                    <div class="device-stat-pill success">
-                        <span class="stat-label">Online</span>
-                        <strong class="stat-value" id="devOnlineCount">0</strong>
-                    </div>
-                    <div class="device-stat-pill info">
-                        <span class="stat-label">GPS Active</span>
-                        <strong class="stat-value" id="devGpsCount">0</strong>
-                    </div>
-                    <div class="device-stat-pill warning">
-                        <span class="stat-label">Unassigned</span>
-                        <strong class="stat-value" id="devUnassignedCount">0</strong>
-                    </div>
-                </div>
-
-                <!-- Unassigned Alert Banner -->
-                <div class="unassigned-alert hidden" id="devUnassignedBanner">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
-                    <div>
-                        <strong>Unassigned Hardware Trackers Detected!</strong>
-                        <p>Hardware devices are transmitting telemetry without a mapped bus. Assign them to a bus below to enable live tracking.</p>
-                    </div>
-                </div>
-
-                <!-- Devices Table -->
-                <div class="content-box">
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Status</th>
-                                    <th>Device Name & ID</th>
-                                    <th>Platform</th>
-                                    <th>MAC / IMEI</th>
-                                    <th>GPS Fix</th>
-                                    <th>Assigned Bus</th>
-                                    <th>Last Seen</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="devicesTableViewBody">
-                                <!-- Populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ================================================================ -->
-            <!-- VIEW 9: STORAGE MANAGEMENT (300 MB Hard Limit & Retention) -->
+            <!-- VIEW 7: STORAGE MANAGEMENT (300 MB Allocation, Cleanup & Records) -->
             <!-- ================================================================ -->
             <section class="app-view" id="viewStorage">
                 <div class="view-header-row">
                     <div>
                         <h2><i class="fa-solid fa-hard-drive"></i> Storage Management & Optimization</h2>
-                        <p class="section-desc">Monitor database consumption against the 300 MB maximum allocation with strict 7-day rolling retention</p>
+                        <p class="section-desc">Monitor database consumption against the 300 MB maximum allocation with strict 7-day rolling retention and records management</p>
                     </div>
                     <div class="view-actions">
                         <button class="btn btn-danger btn-sm" id="btnTriggerStorageCleanup">
@@ -927,12 +807,12 @@
                     </div>
                 </div>
 
-                <!-- 300 MB Gauge Box -->
+                <!-- 300 MB Gauge Hero Box -->
                 <div class="storage-page-hero-card">
                     <div class="hero-top-row">
                         <div>
                             <span class="hero-pill">MAXIMUM STORAGE ALLOCATION: 300 MB</span>
-                            <h3 id="storageHeroUsageText">0.50 MB of 300.0 MB Used</h3>
+                            <h3 id="storageHeroUsageText">0.05 MB of 300.0 MB Used</h3>
                         </div>
                         <div class="storage-warning-badge normal" id="storageHeroBadge">
                             <i class="fa-solid fa-circle-check"></i> NORMAL STATUS (&lt;70%)
@@ -941,36 +821,91 @@
 
                     <div class="storage-progress-wrapper" style="margin: 20px 0 10px 0;">
                         <div class="storage-progress-track">
-                            <div class="storage-progress-fill normal" id="storageHeroProgressFill" style="width: 0.2%;"></div>
+                            <div class="storage-progress-fill normal" id="storageHeroProgressFill" style="width: 0.1%;"></div>
                         </div>
                     </div>
 
                     <div class="storage-stat-chips-grid">
                         <div class="stat-chip">
-                            <span class="chip-label">Database Files</span>
-                            <strong class="chip-val" id="storageCatDb">0.05 MB</strong>
+                            <span class="chip-label">Stored Records</span>
+                            <strong class="chip-val text-primary" id="storageRecordsCount">0</strong>
                         </div>
                         <div class="stat-chip">
-                            <span class="chip-label">GPS Tracking Logs</span>
-                            <strong class="chip-val" id="storageCatTracking">0.12 MB</strong>
+                            <span class="chip-label">Oldest Tracking Date</span>
+                            <strong class="chip-val" id="storageOldestDate">N/A</strong>
                         </div>
                         <div class="stat-chip">
-                            <span class="chip-label">Daily Trips</span>
-                            <strong class="chip-val" id="storageCatTrips">0.15 MB</strong>
+                            <span class="chip-label">Latest Tracking Date</span>
+                            <strong class="chip-val" id="storageLatestDate">N/A</strong>
                         </div>
                         <div class="stat-chip">
-                            <span class="chip-label">Daily Backups</span>
-                            <strong class="chip-val" id="storageCatBackups">0.18 MB</strong>
+                            <span class="chip-label">Retention Policy</span>
+                            <strong class="chip-val text-success" id="storageRetentionStatus">Active 7-Day</strong>
                         </div>
                         <div class="stat-chip">
-                            <span class="chip-label">Security & Audit</span>
-                            <strong class="chip-val" id="storageCatSecurity">0.02 MB</strong>
+                            <span class="chip-label">Available Space</span>
+                            <strong class="chip-val" id="storageAvailMb">299.95 MB</strong>
                         </div>
                     </div>
                 </div>
 
+                <!-- Stored Tracking Records Explorer -->
+                <div class="content-box" style="margin-top: 24px;">
+                    <div class="content-box-header">
+                        <div>
+                            <h3><i class="fa-solid fa-database"></i> Stored Tracking Records Explorer</h3>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Inspect or delete stored coordinates by bus and date</p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-danger btn-sm" id="btnDeleteSelectedRecords">
+                                <i class="fa-solid fa-trash"></i> Delete Selected Records
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Records Search Filters -->
+                    <div class="content-toolbar">
+                        <div class="toolbar-item">
+                            <label for="storageBusFilter">Filter by Bus:</label>
+                            <select id="storageBusFilter" class="form-select">
+                                <option value="">-- All 30 Buses --</option>
+                            </select>
+                        </div>
+                        <div class="toolbar-item">
+                            <label for="storageDateFilter">Filter by Date:</label>
+                            <input type="date" id="storageDateFilter" class="form-select">
+                        </div>
+                        <div class="toolbar-item" style="align-self: flex-end;">
+                            <button class="btn btn-primary btn-sm" id="btnFilterStorageRecords">
+                                <i class="fa-solid fa-filter"></i> Load Records
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;">
+                                        <input type="checkbox" id="chkSelectAllStorageRecords" title="Select All">
+                                    </th>
+                                    <th>Timestamp</th>
+                                    <th>Bus ID</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Speed</th>
+                                    <th>Device ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="storageRecordsTableBody">
+                                <tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No records loaded. Select filters and click Load Records.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Storage Files Breakdown Table -->
-                <div class="content-box">
+                <div class="content-box" style="margin-top: 24px;">
                     <div class="content-box-header">
                         <h3><i class="fa-solid fa-file-code"></i> Data Files Breakdown & Retention Status</h3>
                         <span class="badge badge-success">Strict 7-Day Rolling Window Active</span>
@@ -987,116 +922,6 @@
                                 </tr>
                             </thead>
                             <tbody id="storageFilesTableBody">
-                                <!-- Populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ================================================================ -->
-            <!-- VIEW 10: SECURITY SETTINGS (RBAC & Audit Logs) -->
-            <!-- ================================================================ -->
-            <section class="app-view" id="viewSecurity">
-                <div class="view-header-row">
-                    <div>
-                        <h2><i class="fa-solid fa-shield-halved"></i> Security & Role-Based Access Control</h2>
-                        <p class="section-desc">Server-side authorization, password hashing, brute-force protection, and audit logs</p>
-                    </div>
-                </div>
-
-                <div class="security-grid-2">
-                    <!-- Session & Change Password Card -->
-                    <div class="content-box">
-                        <div class="content-box-header">
-                            <h3><i class="fa-solid fa-key"></i> Administrator Authentication</h3>
-                        </div>
-                        <div class="security-card-body">
-                            <div class="current-user-info-box">
-                                <span class="lbl">Authenticated As:</span>
-                                <strong class="val" id="secCurrentUsername">admin</strong>
-                                <span class="role-tag admin" id="secCurrentRole">ADMIN</span>
-                            </div>
-
-                            <form id="changePasswordForm" style="margin-top: 18px;">
-                                <h4>Change Password</h4>
-                                <div class="form-group">
-                                    <label for="oldPassInput">Current Password</label>
-                                    <input type="password" id="oldPassInput" placeholder="••••••••" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="newPassInput">New Password (min 6 chars)</label>
-                                    <input type="password" id="newPassInput" placeholder="••••••••" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-lock"></i> Update Password</button>
-                            </form>
-                        </div>
-                    </div>
-
-                    <!-- Manage Users Card -->
-                    <div class="content-box">
-                        <div class="content-box-header">
-                            <h3><i class="fa-solid fa-users"></i> Authorized Users (RBAC)</h3>
-                        </div>
-                        <div class="security-card-body">
-                            <table class="data-table" style="font-size: 13px;">
-                                <thead>
-                                    <tr>
-                                        <th>Username</th>
-                                        <th>Role</th>
-                                        <th>Full Name</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="secUsersTableBody">
-                                    <!-- Populated dynamically -->
-                                </tbody>
-                            </table>
-
-                            <form id="createNewUserForm" style="margin-top: 18px;">
-                                <h4>Create Authorized User</h4>
-                                <div class="form-grid-2">
-                                    <div class="form-group">
-                                        <label for="newUserNameInput">Username</label>
-                                        <input type="text" id="newUserNameInput" placeholder="e.g. dispatcher01" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="newUserRoleSelect">Role</label>
-                                        <select id="newUserRoleSelect" class="form-select">
-                                            <option value="VIEWER">VIEWER (Read-Only)</option>
-                                            <option value="ADMIN">ADMIN (Full Access)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="newUserPasswordInput">Password</label>
-                                    <input type="password" id="newUserPasswordInput" placeholder="••••••••" required>
-                                </div>
-                                <button type="submit" class="btn btn-outline btn-sm"><i class="fa-solid fa-user-plus"></i> Add User</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Audit Logs Table -->
-                <div class="content-box" style="margin-top: 24px;">
-                    <div class="content-box-header">
-                        <h3><i class="fa-solid fa-list-check"></i> Security Audit Logs</h3>
-                        <span class="badge badge-info">Latest Administrative Actions</span>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>User</th>
-                                    <th>Role</th>
-                                    <th>Action</th>
-                                    <th>Target</th>
-                                    <th>Details</th>
-                                    <th>Client IP</th>
-                                </tr>
-                            </thead>
-                            <tbody id="secAuditLogsTableBody">
                                 <!-- Populated dynamically -->
                             </tbody>
                         </table>
@@ -1179,6 +1004,87 @@
                         <button type="button" class="btn btn-outline" id="btnCancelEditBusModal">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- REGISTER BUS MODAL -->
+    <div class="modal-backdrop hidden" id="registerBusModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-plus-circle"></i> Register New Fleet Bus</h2>
+                <button class="close-modal-btn" id="closeRegisterBusModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="dedicatedRegisterBusForm">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="regBusName">Bus Name <span class="required">*</span></label>
+                            <input type="text" id="regBusName" placeholder="e.g. Campus Express 31" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regBusId">Bus ID <span class="required">*</span></label>
+                            <input type="text" id="regBusId" placeholder="e.g. BUS-31" required style="text-transform:uppercase;">
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="regBusNumber">License Plate <span class="required">*</span></label>
+                            <input type="text" id="regBusNumber" placeholder="e.g. TS 09 UB 1031" required style="text-transform:uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label for="regDeviceId">Assigned ESP Device ID <span class="required">*</span></label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="regDeviceId" placeholder="e.g. AIV-DEV-031" required style="text-transform:uppercase; flex: 1;">
+                                <select id="regDeviceSelect" class="form-select" style="max-width: 160px;" title="Select from unassigned detected devices">
+                                    <option value="">-- Detected --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="regDriverName">Driver Name <span class="required">*</span></label>
+                            <input type="text" id="regDriverName" placeholder="e.g. Ramesh Kumar" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regDriverPhone">Driver Phone Number <span class="required">*</span></label>
+                            <input type="text" id="regDriverPhone" placeholder="e.g. +91 98480 11031" required>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="regRouteSelect">Assigned Route <span class="required">*</span></label>
+                            <select id="regRouteSelect" class="form-select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="regCollegeDest">College Destination</label>
+                            <input type="text" id="regCollegeDest" value="Sphoorthy Engineering College" readonly class="input-readonly">
+                        </div>
+                    </div>
+                    <div class="form-actions-bar">
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Register Bus</button>
+                        <button type="button" class="btn btn-outline" id="btnCancelRegisterModal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- STORAGE DELETE RECORDS CONFIRMATION MODAL -->
+    <div class="modal-backdrop hidden" id="storageDeleteConfirmModal">
+        <div class="modal-card" style="max-width: 440px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-triangle-exclamation text-danger"></i> Confirm Delete Records</h2>
+                <button class="close-modal-btn" id="closeDeleteConfirmModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 20px 24px;">
+                <p style="font-size: 15px; margin-bottom: 12px;">Are you sure you want to permanently delete <strong id="deleteRecordsCountText" class="text-danger">0</strong> selected tracking record(s)?</p>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">This action cannot be undone. Storage space will be immediately freed.</p>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button type="button" class="btn btn-danger" id="btnConfirmDeleteRecords"><i class="fa-solid fa-trash"></i> Yes, Delete Records</button>
+                    <button type="button" class="btn btn-outline" id="btnCancelDeleteRecords">Cancel</button>
+                </div>
             </div>
         </div>
     </div>

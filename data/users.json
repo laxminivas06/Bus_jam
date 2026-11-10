@@ -2,7 +2,7 @@
   {
     "id": "USR-001",
     "username": "admin",
-    "password_hash": "scrypt:32768:8:1$9BcLpDzGxME4jEp5$669fa3233099782264decb9a81cb8e779173c8f0b70349999fbc7a9b711b7db61d2f752dc20df04aef8967514396be33e1962551449e93f87635070917b1ca45",
+    "password_hash": "scrypt:32768:8:1$YjCyMPyPWCtGmBSs$010a00ec57345e753877ee741f0c5ff83bbafac6c3bbfd86436827a63b076c4c62f4533019a4217a846c22992b529c4dec073580c6de5e1749e7dde62e27557e",
     "role": "ADMIN",
     "full_name": "System Administrator",
     "created_at": "2026-11-10T00:00:00+00:00"
@@ -10,7 +10,7 @@
   {
     "id": "USR-002",
     "username": "viewer",
-    "password_hash": "scrypt:32768:8:1$v51YuFlUaqZb2CWb$18e71b569b805d5d639007b02e40af70aa53f2fd3fce75e80103038a498e05433fdab6477134dc601ce592f1e7895a749a5991c1982e37ecaae7c96a2360a1fe",
+    "password_hash": "scrypt:32768:8:1$fOb9zwP5gMxZ22Pw$03a0db65068c32ee7285196b734da2436f060cc8401aa99d051ce812a0f6b7cc3fb71aad23bc41829c1faa8ce5b00014b3eac60c35bed93a8a012d224a1b31ef",
     "role": "VIEWER",
     "full_name": "Fleet Dispatch Viewer",
     "created_at": "2026-11-10T00:00:00+00:00"

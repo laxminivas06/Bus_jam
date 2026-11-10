@@ -91,25 +91,37 @@ def point_to_segment_distance(plat, plng, alat, alng, blat, blng):
     return dist, nearest_lat, nearest_lng
 
 
+def _extract_coord(wp):
+    """Safely extract (lat, lng) as floats from dict or list/tuple."""
+    if isinstance(wp, (list, tuple)):
+        return float(wp[0]), float(wp[1])
+    if isinstance(wp, dict):
+        lat = wp.get("lat") if "lat" in wp else wp.get("latitude", 0.0)
+        lng = wp.get("lng") if "lng" in wp else (wp.get("longitude", 0.0) if "longitude" in wp else wp.get("lon", 0.0))
+        return float(lat), float(lng)
+    return 0.0, 0.0
+
+
 def distance_to_route_polyline(plat, plng, waypoints):
     """
-    Find minimum distance in METERS from point P(plat, plng) to a polyline defined by a list of [lat, lng].
+    Find minimum distance in METERS from point P(plat, plng) to a polyline defined by a list of waypoints.
     Returns (min_distance_m, nearest_segment_index, (nearest_lat, nearest_lng)).
     """
     if not waypoints or len(waypoints) < 1:
         return 0.0, -1, (plat, plng)
 
+    p0 = _extract_coord(waypoints[0])
     if len(waypoints) == 1:
-        d = haversine_distance_m(plat, plng, waypoints[0][0], waypoints[0][1])
-        return d, 0, (waypoints[0][0], waypoints[0][1])
+        d = haversine_distance_m(plat, plng, p0[0], p0[1])
+        return d, 0, p0
 
     min_dist = float("inf")
     best_seg = 0
-    best_point = (waypoints[0][0], waypoints[0][1])
+    best_point = p0
 
     for i in range(len(waypoints) - 1):
-        alat, alng = waypoints[i][0], waypoints[i][1]
-        blat, blng = waypoints[i + 1][0], waypoints[i + 1][1]
+        alat, alng = _extract_coord(waypoints[i])
+        blat, blng = _extract_coord(waypoints[i + 1])
 
         d, nlat, nlng = point_to_segment_distance(plat, plng, alat, alng, blat, blng)
         if d < min_dist:
@@ -127,10 +139,9 @@ def calculate_polyline_length_km(waypoints):
 
     total_km = 0.0
     for i in range(len(waypoints) - 1):
-        total_km += haversine_distance_km(
-            waypoints[i][0], waypoints[i][1],
-            waypoints[i + 1][0], waypoints[i + 1][1]
-        )
+        alat, alng = _extract_coord(waypoints[i])
+        blat, blng = _extract_coord(waypoints[i + 1])
+        total_km += haversine_distance_km(alat, alng, blat, blng)
     return round(total_km, 2)
 
 
@@ -157,14 +168,14 @@ def calculate_route_progress_and_eta(bus_lat, bus_lng, current_speed, waypoints,
     # Calculate distance along waypoints up to best_seg
     completed_km = 0.0
     for i in range(best_seg):
-        completed_km += haversine_distance_km(
-            waypoints[i][0], waypoints[i][1],
-            waypoints[i + 1][0], waypoints[i + 1][1]
-        )
+        alat, alng = _extract_coord(waypoints[i])
+        blat, blng = _extract_coord(waypoints[i + 1])
+        completed_km += haversine_distance_km(alat, alng, blat, blng)
 
     # Add partial segment distance from waypoints[best_seg] to nearest_pt
+    seg_pt = _extract_coord(waypoints[best_seg])
     completed_km += haversine_distance_km(
-        waypoints[best_seg][0], waypoints[best_seg][1],
+        seg_pt[0], seg_pt[1],
         nearest_pt[0], nearest_pt[1]
     )
 
