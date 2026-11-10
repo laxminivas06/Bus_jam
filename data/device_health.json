@@ -1,16 +1,1 @@
-{
-  "AIV-DEV-001": {
-    "device_id": "AIV-DEV-001",
-    "first_seen": "2026-11-10T02:36:05.386339+00:00",
-    "total_packets": 3,
-    "invalid_packets": 0,
-    "http_errors": 0,
-    "last_seen": "2026-11-10T02:38:37.362885+00:00",
-    "bus_id": "BUS-01",
-    "satellites": 8,
-    "accuracy": 1.5,
-    "altitude": 500.0,
-    "gps_status": "valid",
-    "ip_address": "127.0.0.1"
-  }
-}
+{}

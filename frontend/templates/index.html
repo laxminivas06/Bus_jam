@@ -594,8 +594,13 @@
                             </div>
                             <div class="form-group">
                                 <label for="regDeviceId">ESP Device ID <span class="required">*</span></label>
-                                <input type="text" id="regDeviceId" placeholder="e.g. AIV-DEV-031" required style="text-transform:uppercase;">
-                                <span class="form-help">Unique hardware identifier transmitted by the firmware</span>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="regDeviceId" placeholder="e.g. AIV-DEV-031" required style="text-transform:uppercase; flex: 1;">
+                                    <select id="regDeviceSelect" class="form-select" style="max-width: 180px;" title="Select from unassigned detected devices">
+                                        <option value="">-- Pick Device --</option>
+                                    </select>
+                                </div>
+                                <span class="form-help">Select an unassigned detected device or enter a new device ID</span>
                             </div>
                         </div>
 
@@ -1123,6 +1128,56 @@
                     <button type="submit" class="btn btn-primary full-width" style="margin-top: 10px;">
                         <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In
                     </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT BUS MODAL -->
+    <div class="modal-backdrop hidden" id="editBusModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-pen-to-square"></i> Edit Bus & Device Mapping</h2>
+                <button class="close-modal-btn" id="closeEditBusModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="editBusForm">
+                    <input type="hidden" id="editBusId">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editBusName">Bus Name <span class="required">*</span></label>
+                            <input type="text" id="editBusName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editBusNumber">License Plate <span class="required">*</span></label>
+                            <input type="text" id="editBusNumber" required style="text-transform:uppercase;">
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editDeviceId">Assigned ESP Device ID <span class="required">*</span></label>
+                            <input type="text" id="editDeviceId" required style="text-transform:uppercase;">
+                            <span class="form-help">Unique ESP8266/ESP32 Tracker ID</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="editRouteSelect">Assigned Transit Route <span class="required">*</span></label>
+                            <select id="editRouteSelect" class="form-select" required></select>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editDriverName">Driver Name</label>
+                            <input type="text" id="editDriverName">
+                        </div>
+                        <div class="form-group">
+                            <label for="editDriverPhone">Driver Phone</label>
+                            <input type="text" id="editDriverPhone">
+                        </div>
+                    </div>
+                    <div class="form-actions-bar">
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Changes</button>
+                        <button type="button" class="btn btn-outline" id="btnCancelEditBusModal">Cancel</button>
+                    </div>
                 </form>
             </div>
         </div>

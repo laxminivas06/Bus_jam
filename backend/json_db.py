@@ -24,7 +24,7 @@ DEFAULT_USERS = [
     {
         "id": "USR-001",
         "username": "admin",
-        "password_hash": generate_password_hash("adminpass"),
+        "password_hash": generate_password_hash("AdminPassword123!"),
         "role": "ADMIN",
         "full_name": "System Administrator",
         "created_at": "2026-11-10T00:00:00+00:00"
@@ -32,7 +32,7 @@ DEFAULT_USERS = [
     {
         "id": "USR-002",
         "username": "viewer",
-        "password_hash": generate_password_hash("viewer123"),
+        "password_hash": generate_password_hash("ViewerPassword123!"),
         "role": "VIEWER",
         "full_name": "Fleet Dispatch Viewer",
         "created_at": "2026-11-10T00:00:00+00:00"
@@ -327,7 +327,7 @@ class JsonDB:
 
             files_and_defaults = [
                 (self.buses_file, []),
-                (self.devices_file, DEFAULT_DEVICES),
+                (self.devices_file, []),
                 (self.locations_file, {}),
                 (self.history_file, []),
                 (self.settings_file, {
@@ -355,7 +355,7 @@ class JsonDB:
             ]
 
             for file_path, default_content in files_and_defaults:
-                if not file_path.exists() or file_path.stat().st_size <= 2:
+                if not file_path.exists():
                     self._write_json_direct(file_path, default_content)
 
             # Ensure default users exist if empty
@@ -1310,7 +1310,7 @@ class JsonDB:
             return None
         target = str(route_id).strip().upper()
         for r in self.get_all_routes():
-            if r.get("id", "").upper() == target or r.get("route_code", "").upper() == target:
+            if r.get("id", "").upper() == target or r.get("route_id", "").upper() == target or r.get("route_code", "").upper() == target:
                 return r
         return None
 

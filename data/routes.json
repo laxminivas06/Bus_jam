@@ -134,24 +134,5 @@
       "STOP-09",
       "STOP-10"
     ]
-  },
-  {
-    "id": "ROUTE-04",
-    "bus_id": "",
-    "route_name": "Unauthorized Test Route",
-    "route_code": "ROUTE-04",
-    "origin": "Start Terminal",
-    "destination": "End Terminal",
-    "description": "Learned transit route.",
-    "first_recorded": "08:00 AM",
-    "last_recorded": "09:00 AM",
-    "frequency": 1,
-    "operating_times": [
-      "08:00 AM - 09:00 AM"
-    ],
-    "distance_km": 10.0,
-    "duration_minutes": 60,
-    "waypoints": [],
-    "assigned_stops": []
   }
 ]

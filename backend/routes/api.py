@@ -1507,6 +1507,11 @@ def get_bus_route_analysis(bus_id):
 def get_routes():
     """List all predefined & auto-detected routes."""
     routes = db_instance.get_all_routes()
+    for r in routes:
+        if not r.get("route_id") and r.get("id"):
+            r["route_id"] = r.get("id")
+        elif not r.get("id") and r.get("route_id"):
+            r["id"] = r.get("route_id")
     return jsonify({"status": "success", "count": len(routes), "routes": routes}), 200
 
 
@@ -1898,24 +1903,27 @@ def get_admin_dashboard():
     # Precise 300 MB storage metrics
     storage_metrics = db_instance.get_storage_metrics()
 
+    dashboard_data = {
+        "total_buses": total_buses,
+        "active_buses": active_buses,
+        "inactive_buses": inactive_buses,
+        "running_buses": running_buses,
+        "reached_college_buses": reached_college_buses,
+        "total_devices": total_devices,
+        "online_devices": online_devices,
+        "offline_devices": offline_devices,
+        "unassigned_devices": unassigned_devices,
+        "total_routes": len(all_routes),
+        "completed_trips_today": completed_trips_today,
+        "running_trips_today": running_trips_today,
+        "storage": storage_metrics,
+        "timestamp": now.isoformat()
+    }
+
     return jsonify({
         "status": "success",
-        "dashboard": {
-            "total_buses": total_buses,
-            "active_buses": active_buses,
-            "inactive_buses": inactive_buses,
-            "running_buses": running_buses,
-            "reached_college_buses": reached_college_buses,
-            "total_devices": total_devices,
-            "online_devices": online_devices,
-            "offline_devices": offline_devices,
-            "unassigned_devices": unassigned_devices,
-            "total_routes": len(all_routes),
-            "completed_trips_today": completed_trips_today,
-            "running_trips_today": running_trips_today,
-            "storage": storage_metrics,
-            "timestamp": now.isoformat()
-        }
+        "dashboard": dashboard_data,
+        "metrics": dashboard_data
     }), 200
 
 
@@ -1949,6 +1957,29 @@ def cleanup_storage():
         "message": "Storage cleanup executed successfully",
         "result": res,
         "storage": db_instance.get_storage_metrics()
+    }), 200
+
+
+@api_bp.route("/admin/database/reset", methods=["POST"])
+@admin_required
+def reset_database():
+    """Wipe all operational fleet tracking data and reset database to clean free state."""
+    db_instance.clear_all_data()
+    username = session.get("user", {}).get("username") or "admin"
+    db_instance.record_audit_log(
+        username=username,
+        role="ADMIN",
+        action="DATABASE_RESET",
+        target_type="DATABASE",
+        target_id="ALL_TABLES",
+        details="Wiped all operational tracking data, reset database to 100% free state.",
+        ip_address=request.remote_addr
+    )
+    metrics = db_instance.get_storage_metrics()
+    return jsonify({
+        "status": "success",
+        "message": "Database wiped and arranged as free. Storage is now 100% available.",
+        "storage": metrics
     }), 200
 
 
@@ -2105,34 +2136,8 @@ def update_college_route():
 
 
 # -----------------------------------------------------------------------------
-# ROUTE MANAGEMENT & GEOCODING
+# ROUTE MANAGEMENT & GEOCODING (UPDATE & DELETE)
 # -----------------------------------------------------------------------------
-@api_bp.route("/routes", methods=["GET"])
-def get_routes_route():
-    """List all registered transit routes."""
-    routes = db_instance.get_all_routes()
-    return jsonify({
-        "status": "success",
-        "count": len(routes),
-        "routes": routes
-    }), 200
-
-
-@api_bp.route("/routes/<route_id>", methods=["GET"])
-def get_route_route(route_id):
-    """Get single transit route details."""
-    route = db_instance.get_route(route_id)
-    if not route:
-        return jsonify({"status": "error", "message": f"Route '{route_id}' not found"}), 404
-    return jsonify({
-        "status": "success",
-        "route": route
-    }), 200
-
-
-
-
-
 @api_bp.route("/routes/<route_id>", methods=["PUT"])
 @admin_required
 def update_route_route(route_id):
